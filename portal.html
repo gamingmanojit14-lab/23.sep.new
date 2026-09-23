@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Customer Portal — TextilePOS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<style>
+  body{ font-family:'Inter',system-ui,sans-serif; margin:0; }
+  .hide{ display:none !important; }
+  html.dark body { background: #111827; color: #e5e7eb; }
+  html.dark .bg-white { background: #1f2937 !important; color: #e5e7eb; }
+  html.dark .bg-gray-100 { background: #111827 !important; }
+  html.dark .bg-gray-50 { background: #1a202c !important; }
+  html.dark .text-gray-500 { color: #9ca3af !important; }
+  html.dark .text-gray-700 { color: #e5e7eb !important; }
+  html.dark input { background: #374151 !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
+</style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<div class="max-w-md mx-auto p-4">
+  <div class="text-center my-6">
+    <div class="text-5xl mb-2">🧵</div>
+    <h1 class="text-2xl font-extrabold text-gray-800">Customer Portal</h1>
+    <p class="text-xs text-gray-500 mt-1">View your invoices & dues</p>
+  </div>
+
+  <!-- LOGIN PANEL -->
+  <div id="loginPanel" class="bg-white rounded-2xl p-6 shadow-sm">
+    <label class="block text-xs font-bold text-gray-600 mb-1">Shop ID</label>
+    <input id="inpShop" placeholder="SHOP-XXXXXX"
+      class="w-full px-3 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 font-mono uppercase">
+
+    <label class="block text-xs font-bold text-gray-600 mb-1">Your phone number</label>
+    <input id="inpPhone" type="tel" inputmode="numeric" placeholder="10-digit mobile"
+      class="w-full px-3 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-4">
+
+    <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition active:scale-[.98]">
+      View My Account
+    </button>
+    <p id="loginErr" class="text-xs text-red-600 mt-2 text-center"></p>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashPanel" class="hide space-y-3">
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="text-xs text-gray-500">Welcome</div>
+      <div class="text-xl font-extrabold" id="custName">—</div>
+      <div class="text-xs text-gray-500 mt-1" id="shopName">—</div>
+      <button id="logoutBtn" class="mt-3 text-xs text-red-600 underline">Logout</button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="text-[10px] text-gray-500">Pending Due</div>
+        <div class="text-xl font-extrabold text-red-600 mt-1" id="dueAmt">₹0</div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="text-[10px] text-gray-500">Loyalty Points</div>
+        <div class="text-xl font-extrabold text-purple-600 mt-1" id="loyaltyPts">0</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <h3 class="font-bold text-sm mb-3">🧾 Recent Invoices</h3>
+      <div id="invoiceList" class="space-y-2"></div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-[11px] text-gray-600 leading-relaxed">
+      <b class="text-blue-700">ℹ️ Note:</b> This portal shows your purchase history. For payments, contact the shop directly.
+    </div>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="common.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  const q = s => document.querySelector(s);
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const shopId = q('#inpShop').value.trim().toUpperCase();
+    const phone = q('#inpPhone').value.replace(/\D/g,'');
+    q('#loginErr').textContent = '';
+    if (!shopId || !phone) { q('#loginErr').textContent = 'Enter Shop ID and phone'; return; }
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+      const shopDoc = await TP.db.collection('shops').doc(shopId).get();
+      if (!shopDoc.exists) { q('#loginErr').textContent = 'Shop not found'; return; }
+
+      const custSnap = await TP.db.collection('shops').doc(shopId).collection('customers')
+        .where('phone', '==', phone).limit(1).get();
+      if (custSnap.empty) { q('#loginErr').textContent = 'No customer with this phone'; return; }
+
+      const cust = { id: custSnap.docs[0].id, ...custSnap.docs[0].data() };
+
+      q('#loginPanel').classList.add('hide');
+      q('#dashPanel').classList.remove('hide');
+      q('#custName').textContent = cust.name;
+      q('#shopName').textContent = shopDoc.data().shopName || 'Shop';
+      q('#dueAmt').textContent = '₹' + Number(cust.due || 0).toFixed(2);
+      q('#loyaltyPts').textContent = String(cust.loyaltyPoints || 0);
+
+      const salesSnap = await TP.db.collection('shops').doc(shopId).collection('sales')
+        .where('customerId', '==', cust.id).orderBy('saleDate', 'desc').limit(20).get();
+      const sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      q('#invoiceList').innerHTML = sales.length ? sales.map(s => `
+        <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2.5 text-xs">
+          <div>
+            <div class="font-semibold font-mono">${s.invoiceNo}</div>
+            <div class="text-[10px] text-gray-500">${TP.fmtDate(s.saleDate)}</div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold">₹${Number(s.total||0).toFixed(2)}</div>
+            ${(+s.due||0)>0 ? `<div class="text-[10px] text-red-600">Due ₹${Number(s.due).toFixed(2)}</div>` : `<div class="text-[10px] text-green-600">Paid</div>`}
+          </div>
+        </div>
+      `).join('') : '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
+
+      localStorage.setItem('tp_portal', JSON.stringify({ shopId, custId: cust.id, phone }));
+
+      q('#logoutBtn').onclick = () => {
+        localStorage.removeItem('tp_portal');
+        location.reload();
+      };
+
+    } catch (e) {
+      console.error(e);
+      q('#loginErr').textContent = e.message || 'Login failed';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'View My Account';
+    }
+  });
+
+  // Auto-login
+  try {
+    const saved = JSON.parse(localStorage.getItem('tp_portal') || 'null');
+    if (saved && saved.shopId && saved.phone) {
+      q('#inpShop').value = saved.shopId;
+      q('#inpPhone').value = saved.phone;
+      setTimeout(() => document.getElementById('loginBtn').click(), 200);
+    }
+  } catch(e) {}
+
+})();
+</script>
+</body>
+</html>
