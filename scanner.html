@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Scanner Device — TextilePOS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#16a34a">
+<style>
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  body{ font-family:'Inter',system-ui,sans-serif; margin:0; }
+  .hide{ display:none !important; }
+  @keyframes fadeIn{ from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+  .fade-in{ animation:fadeIn .2s ease; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.4} }
+  .pulse{ animation:pulse 1.5s infinite; }
+</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+
+<!-- LOADING -->
+<div id="loadingView" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-[999]">
+  <div class="text-center">
+    <div class="text-6xl mb-3">📱</div>
+    <div class="text-lg font-bold">Connecting...</div>
+    <div class="text-xs text-gray-400 mt-2">Joining scanner session</div>
+  </div>
+</div>
+
+<!-- ERROR -->
+<div id="errorView" class="hide fixed inset-0 bg-gray-900 flex items-center justify-center p-4 z-[999]">
+  <div class="text-center max-w-sm">
+    <div class="text-6xl mb-3">⚠️</div>
+    <h1 id="errTitle" class="text-xl font-extrabold text-red-500 mb-2">Session Not Found</h1>
+    <p id="errMsg" class="text-gray-400 text-sm leading-relaxed"></p>
+    <p class="text-gray-500 text-xs mt-6">Generate a new QR from Salesman/Admin Settings and scan again.</p>
+  </div>
+</div>
+
+<!-- ENDED -->
+<div id="endedView" class="hide fixed inset-0 bg-gray-900 flex items-center justify-center p-4 z-[999]">
+  <div class="text-center max-w-sm">
+    <div class="text-6xl mb-3">✅</div>
+    <h1 class="text-xl font-extrabold text-green-500 mb-2">Session Ended</h1>
+    <p class="text-gray-400 text-sm">The Salesman/Admin disconnected this scanner.</p>
+    <p class="text-gray-500 text-xs mt-4">Scan a new QR to reconnect.</p>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="mainView" class="hide min-h-screen flex flex-col">
+  <header class="bg-green-600 p-3 flex items-center gap-3 shadow-lg">
+    <div class="text-3xl">📷</div>
+    <div class="flex-1 min-w-0">
+      <div class="font-bold text-base truncate" id="shopName">—</div>
+      <div class="text-[11px] opacity-90">
+        <span id="salesmanName">—</span> · Scanner Device
+      </div>
+    </div>
+    <div class="bg-white/20 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+      <span class="inline-block w-2 h-2 rounded-full bg-green-300 mr-1 pulse"></span>LIVE
+    </div>
+  </header>
+
+  <div class="flex-1 p-3 flex flex-col gap-3">
+    <div class="relative bg-black rounded-2xl overflow-hidden border-2 border-green-500" style="min-height:300px">
+      <div id="qrReader" class="w-full"></div>
+      <div id="camStatus" class="absolute inset-0 flex items-center justify-center bg-black/70 text-center p-4">
+        <div>
+          <div class="text-5xl mb-2">🎥</div>
+          <div class="text-sm">Starting camera...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-xl p-3">
+      <div class="text-[11px] text-gray-400 mb-2">📝 Or enter barcode manually:</div>
+      <div class="flex gap-2">
+        <input id="manualInput" type="text" inputmode="numeric" autocomplete="off"
+          placeholder="Barcode number..."
+          class="flex-1 bg-gray-700 text-white px-3 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm">
+        <button id="manualBtn" class="bg-green-600 px-5 rounded-lg font-bold text-sm active:scale-95">Send</button>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[11px] text-gray-400">📊 Total scans: <b id="scanCount" class="text-green-400">0</b></div>
+        <button id="clearRecent" class="text-[10px] text-gray-400 underline">Reset</button>
+      </div>
+      <div id="recentList" class="space-y-1.5 max-h-40 overflow-y-auto">
+        <div class="text-[11px] text-gray-500 text-center py-3">No scans yet</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-3 text-center text-[11px] text-gray-500 bg-gray-900 border-t border-gray-800">
+    Session: <span id="sessionIdFooter" class="font-mono text-gray-400"></span>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="common.js"></script>
+
+<script>
+/* ============================================================
+   SCANNER DEVICE (IIFE - prevents variable collision with common.js)
+   ============================================================ */
+(function() {
+  'use strict';
+
+  const S = {
+    sessionId: null,
+    session: null,
+    shopId: null,
+    scanner: null,
+    scanCount: 0,
+    recent: [],
+    recentMap: new Map(),
+    sessionUnsub: null,
+    pingTimer: null,
+    audioCtx: null,
+  };
+
+  const q = s => document.querySelector(s);
+
+  function beep(freq = 900, dur = 90) {
+    try {
+      if (!S.audioCtx) S.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (S.audioCtx.state === 'suspended') S.audioCtx.resume();
+      const osc = S.audioCtx.createOscillator();
+      const gain = S.audioCtx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      osc.connect(gain);
+      gain.connect(S.audioCtx.destination);
+      gain.gain.value = 0.18;
+      osc.start();
+      osc.stop(S.audioCtx.currentTime + dur / 1000);
+    } catch (e) {}
+  }
+
+  function toast(msg, type = 'info') {
+    const colors = { info: '#1f2937', success: '#16a34a', error: '#dc2626', warn: '#f59e0b' };
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;background:${colors[type]};
+      color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;
+      box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:90vw;text-align:center;font-family:Inter,sans-serif`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 320);
+    }, 1500);
+  }
+
+  function showView(id) {
+    ['loadingView','errorView','endedView','mainView'].forEach(v => {
+      const el = document.getElementById(v);
+      if (el) el.classList.toggle('hide', v !== id);
+    });
+    window.scrollTo({ top: 0 });
+  }
+
+  function showError(title, msg) {
+    q('#errTitle').textContent = title;
+    q('#errMsg').textContent = msg;
+    showView('errorView');
+  }
+
+  /* INIT */
+  (async function init() {
+    const params = new URLSearchParams(location.search);
+    S.sessionId = params.get('s');
+
+    console.log('[scanner.html] Session:', S.sessionId);
+    console.log('[scanner.html] TP:', typeof TP);
+
+    if (!S.sessionId) {
+      return showError('Missing Session ID', 'No ?s=... parameter. Scan the QR from Salesman/Admin Settings.');
+    }
+
+    if (typeof TP === 'undefined' || !TP.db) {
+      return showError('Firebase Not Loaded', 'Check your internet and refresh.');
+    }
+
+    q('#sessionIdFooter').textContent = S.sessionId.substring(0, 12) + '...';
+
+    try {
+      const sessionRef = TP.db.collection('scannerSessions').doc(S.sessionId);
+      const doc = await sessionRef.get();
+
+      if (!doc.exists) {
+        return showError('Session Not Found', 'The session may have expired or been disconnected.');
+      }
+
+      const data = doc.data();
+      if (!data.shopId) return showError('Invalid Session', 'Session data is incomplete.');
+
+      S.session = data;
+      S.shopId = data.shopId;
+
+      try {
+        await sessionRef.update({
+          scannerConnected: true,
+          lastPing: TP.FV.serverTimestamp(),
+        });
+      } catch (e) { console.warn('update failed:', e); }
+
+      q('#shopName').textContent = data.shopName || 'Shop';
+      q('#salesmanName').textContent = data.salesmanName || 'Salesman';
+
+      showView('mainView');
+
+      S.sessionUnsub = sessionRef.onSnapshot(snap => {
+        if (!snap.exists) {
+          stopScanner();
+          showView('endedView');
+        }
+      }, err => console.error('session watch:', err));
+
+      setTimeout(() => startCamera(), 400);
+
+      S.pingTimer = setInterval(() => {
+        sessionRef.update({ lastPing: TP.FV.serverTimestamp() }).catch(() => {});
+      }, 30000);
+
+    } catch (e) {
+      console.error('[scanner.html] INIT ERROR:', e);
+      showError('Connection Error', String(e.message || e).substring(0, 180));
+    }
+  })();
+
+  function startCamera() {
+    if (S.scanner) return;
+    if (typeof Html5Qrcode === 'undefined') {
+      q('#camStatus').innerHTML = '<div class="text-red-400 text-sm">⚠️ Scanner library not loaded</div>';
+      return;
+    }
+
+    S.scanner = new Html5Qrcode("qrReader", { verbose: false });
+
+    S.scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 12,
+        qrbox: (w, h) => {
+          const m = Math.min(w, h);
+          const s = Math.floor(m * 0.8);
+          return { width: s, height: s };
+        },
+        aspectRatio: 1.0,
+      },
+      (decoded) => onScanSuccess(decoded),
+      () => {}
+    ).then(() => {
+      q('#camStatus').classList.add('hide');
+    }).catch(err => {
+      console.error(err);
+      q('#camStatus').innerHTML = `
+        <div class="text-center">
+          <div class="text-5xl mb-2">🚫</div>
+          <div class="text-sm text-red-400 mb-2">Camera could not start</div>
+          <div class="text-[11px] text-gray-400 mb-3">${(err.message || 'Permission denied').replace(/</g,'&lt;')}</div>
+          <button id="retryCam" class="bg-green-600 px-4 py-2 rounded-lg text-xs font-bold">Retry</button>
+        </div>`;
+      document.getElementById('retryCam').onclick = () => { S.scanner = null; startCamera(); };
+    });
+  }
+
+  function stopScanner() {
+    if (S.scanner) {
+      try { S.scanner.stop().finally(() => { S.scanner = null; }); }
+      catch { S.scanner = null; }
+    }
+    if (S.pingTimer) { clearInterval(S.pingTimer); S.pingTimer = null; }
+    if (S.sessionUnsub) { try { S.sessionUnsub(); } catch {} S.sessionUnsub = null; }
+  }
+
+  async function onScanSuccess(decoded) {
+    const code = String(decoded || '').trim();
+    if (!code) return;
+
+    const now = Date.now();
+    const last = S.recentMap.get(code);
+    if (last && now - last < 2000) return;
+    S.recentMap.set(code, now);
+
+    beep(950, 80);
+    try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
+
+    try {
+      await TP.db.collection('scannerSessions').doc(S.sessionId).collection('scans').add({
+        barcode: code,
+        processed: false,
+        scannedAt: TP.FV.serverTimestamp(),
+      });
+      S.scanCount++;
+      q('#scanCount').textContent = S.scanCount;
+      addRecent(code);
+      toast('✓ ' + code, 'success');
+    } catch (err) {
+      console.error(err);
+      toast('Could not send scan', 'error');
+    }
+  }
+
+  function addRecent(code) {
+    S.recent.unshift({ code, ts: Date.now() });
+    S.recent = S.recent.slice(0, 15);
+    renderRecent();
+  }
+
+  function renderRecent() {
+    const el = q('#recentList');
+    if (!S.recent.length) {
+      el.innerHTML = '<div class="text-[11px] text-gray-500 text-center py-3">No scans yet</div>';
+      return;
+    }
+    el.innerHTML = S.recent.map((r, i) => `
+      <div class="flex items-center gap-2 bg-gray-700 rounded-lg px-2.5 py-2 fade-in">
+        <div class="text-green-400 font-bold text-xs">✓</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-mono text-xs text-white truncate">${r.code.replace(/</g,'&lt;')}</div>
+          <div class="text-[10px] text-gray-400">${new Date(r.ts).toLocaleTimeString()}</div>
+        </div>
+        <div class="text-[10px] text-gray-500">#${i + 1}</div>
+      </div>`).join('');
+  }
+
+  document.getElementById('manualInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const v = e.target.value.trim();
+      if (v) { onScanSuccess(v); e.target.value = ''; }
+    }
+  });
+  document.getElementById('manualBtn').addEventListener('click', () => {
+    const inp = document.getElementById('manualInput');
+    const v = inp.value.trim();
+    if (v) { onScanSuccess(v); inp.value = ''; }
+  });
+
+  document.getElementById('clearRecent').addEventListener('click', () => {
+    S.recent = [];
+    S.scanCount = 0;
+    q('#scanCount').textContent = '0';
+    renderRecent();
+  });
+
+  window.addEventListener('beforeunload', () => { stopScanner(); });
+
+})();
+</script>
+</body>
+</html>
