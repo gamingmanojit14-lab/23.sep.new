@@ -1,0 +1,2985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Admin Panel — TextilePOS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { primary:'#2563eb', success:'#16a34a', danger:'#dc2626', warn:'#f59e0b' },
+  fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+}}}
+</script>
+<style>
+  *{ -webkit-tap-highlight-color:transparent; }
+  body{ font-family:'Inter',system-ui,sans-serif; }
+  input,select,textarea,button{ font-family:inherit; }
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+  .slide-up{animation:slideUp .25s cubic-bezier(.2,.9,.3,1)}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .fade-in{animation:fadeIn .2s ease}
+  .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .no-spin::-webkit-outer-spin-button,.no-spin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .hide{display:none !important}
+  @keyframes scanPulse{0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.4)}50%{box-shadow:0 0 0 8px rgba(37,99,235,0)}}
+  .scan-pulse{animation:scanPulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .pulse{animation:pulse 1.5s infinite}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  .spin{animation:spin 1.2s linear infinite;display:inline-block}
+  /* Dark mode */
+  html.dark body { background: #111827 !important; color: #e5e7eb; }
+  html.dark .bg-white { background: #1f2937 !important; }
+  html.dark .bg-gray-100 { background: #111827 !important; }
+  html.dark .bg-gray-50 { background: #1a202c !important; }
+  html.dark .text-gray-800, html.dark .text-gray-700 { color: #e5e7eb !important; }
+  html.dark .text-gray-500, html.dark .text-gray-600 { color: #9ca3af !important; }
+  html.dark .border-gray-200, html.dark .border-gray-100 { border-color: #374151 !important; }
+  html.dark input, html.dark select, html.dark textarea { background: #374151 !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
+  html.dark .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,.5) !important; }
+  html.dark .hover\:bg-gray-50:hover { background: #374151 !important; }
+</style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<div id="loadingScreen" class="fixed inset-0 bg-blue-600 flex items-center justify-center z-[999]">
+  <div class="text-white text-center">
+    <div class="text-6xl mb-3">🧵</div>
+    <div class="text-lg font-bold">Loading...</div>
+  </div>
+</div>
+
+<div id="app" class="hide min-h-screen">
+  <header class="fixed top-0 inset-x-0 h-14 bg-blue-600 text-white flex items-center px-2 z-40 shadow-md">
+    <button id="menuBtn" class="p-2 w-11 h-11 flex items-center justify-center rounded-lg active:bg-white/20">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <h1 id="pageTitle" class="flex-1 text-lg font-bold ml-1 truncate">POS</h1>
+    <div class="text-right leading-tight pr-2">
+      <div id="userName" class="text-sm font-semibold truncate max-w-[120px]"></div>
+      <div id="userRole" class="text-[10px] opacity-80"></div>
+    </div>
+  </header>
+
+  <div id="drawerBackdrop" class="hide fixed inset-0 bg-black/60 z-50"></div>
+  <aside id="drawer" class="fixed top-0 left-0 bottom-0 w-72 max-w-[85vw] bg-white z-[60] -translate-x-full transition-transform duration-300 shadow-2xl overflow-y-auto">
+    <div class="bg-blue-600 text-white p-5">
+      <div class="text-3xl mb-2">🧵</div>
+      <div id="drawerShop" class="font-bold text-base truncate"></div>
+      <div class="mt-1.5 inline-flex items-center gap-1 text-[11px] bg-white/20 px-2 py-1 rounded-md">
+        <span>Shop:</span><span id="drawerShopId" class="font-mono font-bold"></span>
+      </div>
+      <div id="drawerUser" class="text-[11px] opacity-80 mt-1.5"></div>
+    </div>
+    <nav id="drawerNav" class="p-2"></nav>
+  </aside>
+
+  <main class="pt-14 pb-24 min-h-screen">
+    <section id="page-pos" class="page"></section>
+    <section id="page-dashboard" class="page hide"></section>
+    <section id="page-sales" class="page hide"></section>
+    <section id="page-products" class="page hide"></section>
+    <section id="page-inventory" class="page hide"></section>
+    <section id="page-customers" class="page hide"></section>
+    <section id="page-salesmen" class="page hide"></section>
+    <section id="page-purchases" class="page hide"></section>
+    <section id="page-expenses" class="page hide"></section>
+    <section id="page-returns" class="page hide"></section>
+    <section id="page-shift" class="page hide"></section>
+    <section id="page-reports" class="page hide"></section>
+    <section id="page-analytics" class="page hide"></section>
+    <section id="page-activity" class="page hide"></section>
+    <section id="page-attendance" class="page hide"></section>
+    <section id="page-campaign" class="page hide"></section>
+    <section id="page-settings" class="page hide"></section>
+  </main>
+
+  <div id="cartBar" class="hide fixed bottom-[68px] inset-x-0 z-30 px-3 pointer-events-none">
+    <button id="openCartBtn" class="w-full pointer-events-auto bg-green-600 text-white rounded-2xl py-3.5 px-5 flex items-center justify-between shadow-2xl active:scale-[.98] transition">
+      <span class="text-sm font-semibold">🛒 Cart: <span id="cartCount">0</span></span>
+      <span class="font-extrabold text-lg" id="cartTotal">₹0</span>
+      <span class="text-sm font-semibold bg-white/20 px-3 py-1 rounded-lg">Checkout →</span>
+    </button>
+  </div>
+
+  <nav id="bottomNav" class="fixed bottom-0 inset-x-0 h-[68px] bg-white border-t border-gray-200 flex z-30 shadow-[0_-2px_10px_rgba(0,0,0,.05)]"></nav>
+</div>
+
+<div id="cartModal" class="hide fixed inset-0 z-[80] bg-black/60 items-end sm:items-center justify-center">
+  <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[94vh] flex flex-col slide-up">
+    <div class="p-4 border-b flex items-center justify-between flex-shrink-0">
+      <h2 class="font-bold text-lg">🛒 Cart</h2>
+      <button data-close="cartModal" class="w-9 h-9 rounded-lg hover:bg-gray-100 text-2xl leading-none">×</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4 space-y-2.5" id="cartItems"></div>
+    <div class="p-4 border-t bg-gray-50 flex-shrink-0 max-h-[60vh] overflow-y-auto" id="cartCheckout"></div>
+  </div>
+</div>
+
+<div id="invoiceModal" class="hide fixed inset-0 z-[85] bg-black/70 items-center justify-center p-2">
+  <div class="bg-white w-full max-w-2xl rounded-2xl max-h-[96vh] flex flex-col fade-in">
+    <div class="p-3 border-b flex items-center justify-between">
+      <h2 class="font-bold">🧾 Invoice</h2>
+      <button data-close="invoiceModal" class="w-9 h-9 rounded-lg hover:bg-gray-100 text-2xl leading-none">×</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4" id="invoiceBody"></div>
+    <div class="p-3 border-t flex gap-2 flex-wrap">
+      <button id="printThermal" class="flex-1 min-w-[80px] bg-gray-700 text-white py-3 rounded-xl font-semibold text-sm active:scale-95">🖨 Thermal</button>
+      <button id="printA4" class="flex-1 min-w-[80px] bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm active:scale-95">🖨 A4</button>
+      <button id="waInvoice" class="flex-1 min-w-[80px] bg-green-600 text-white py-3 rounded-xl font-semibold text-sm active:scale-95">💬 WhatsApp</button>
+      <button data-close="invoiceModal" class="flex-1 min-w-[80px] bg-gray-200 py-3 rounded-xl font-semibold text-sm active:scale-95">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="formModal" class="hide fixed inset-0 z-[88] bg-black/60 items-center justify-center p-3">
+  <div class="bg-white rounded-2xl w-full max-w-md max-h-[92vh] flex flex-col fade-in">
+    <div class="p-4 border-b flex items-center justify-between">
+      <h2 id="formModalTitle" class="font-bold text-lg"></h2>
+      <button data-close="formModal" class="w-9 h-9 rounded-lg hover:bg-gray-100 text-2xl leading-none">×</button>
+    </div>
+    <form id="formModalForm" class="flex flex-col flex-1 overflow-hidden">
+      <div id="formModalBody" class="p-4 space-y-3 overflow-y-auto flex-1"></div>
+      <div id="formModalFooter" class="p-4 border-t flex gap-2">
+        <button type="button" data-close="formModal" class="flex-1 bg-gray-100 py-3 rounded-xl font-semibold">Cancel</button>
+        <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<iframe id="printFrame" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;"></iframe>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="common.js"></script>
+
+<script>
+/* ============================================================
+   ADMIN PANEL STATE
+   ============================================================ */
+const A = {
+  profile: null, shopId: null,
+  products: [], customers: [], sales: [], payments: [], users: [],
+  expenses: [], purchases: [], returns: [], shifts: [], activityLogs: [], attendance: [],
+  cart: [], saleType: 'retail', posSearch: '', posCategory: '',
+  custMode: 'walkin', custId: '',
+  currentInvoice: null, currentPage: 'pos',
+  unsubs: [],
+  salesFilter: { salesmanId: '', q: '' },
+  reportPeriod: 'today',
+  scannerSessionId: null, scannerUnsub: null,
+  paymentSessionId: null,
+  currentShiftId: null, currentShift: null,
+};
+
+/* ── MODAL HELPERS ── */
+function openModal(id) { const m = document.getElementById(id); if (m) { m.classList.remove('hide'); m.classList.add('flex'); } }
+function closeModal(id) { const m = document.getElementById(id); if (m) { m.classList.add('hide'); m.classList.remove('flex'); } }
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-close]');
+  if (btn) closeModal(btn.dataset.close);
+});
+
+function openForm(title, fields, values, onSubmit) {
+  values = values || {};
+  document.getElementById('formModalTitle').textContent = title;
+  document.getElementById('formModalBody').innerHTML = fields.map(f => {
+    const v = values[f.name] !== undefined ? values[f.name] : (f.default || '');
+    const cls = 'w-full px-3.5 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-base';
+    if (f.type === 'select') {
+      return `<div><label class="block text-sm font-semibold text-gray-700 mb-1.5">${TP.esc(f.label)}</label>
+        <select name="${f.name}" class="${cls}" ${f.required?'required':''}>
+          ${f.options.map(o => `<option value="${TP.esc(o.value)}" ${String(o.value)===String(v)?'selected':''}>${TP.esc(o.label)}</option>`).join('')}
+        </select></div>`;
+    }
+    if (f.type === 'textarea') {
+      return `<div><label class="block text-sm font-semibold text-gray-700 mb-1.5">${TP.esc(f.label)}</label>
+        <textarea name="${f.name}" rows="3" class="${cls}" ${f.required?'required':''}>${TP.esc(v)}</textarea></div>`;
+    }
+    return `<div><label class="block text-sm font-semibold text-gray-700 mb-1.5">${TP.esc(f.label)}</label>
+      <input name="${f.name}" type="${f.type||'text'}" value="${TP.esc(v)}" class="${cls} no-spin"
+        ${f.required?'required':''} ${f.step?`step="${f.step}"`:''} ${f.min!==undefined?`min="${f.min}"`:''} ${f.placeholder?`placeholder="${TP.esc(f.placeholder)}"`:''}></div>`;
+  }).join('');
+
+  document.getElementById('formModalFooter').style.display = 'flex';
+  const form = document.getElementById('formModalForm');
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    try { await onSubmit(data); closeModal('formModal'); }
+    catch (err) { console.error(err); TP.toast(err.message || 'Save failed', 'error'); }
+  };
+  openModal('formModal');
+  setTimeout(() => document.querySelector('#formModalBody input, #formModalBody select')?.focus(), 100);
+}
+
+/* ── BOOT ── */
+(async function boot() {
+  const profile = await TP.requireAuth('admin');
+  A.profile = profile;
+  A.shopId = profile.shopId;
+  await restoreScannerSession();
+  await restorePaymentSession();
+  await restoreCurrentShift();
+  document.getElementById('loadingScreen').classList.add('hide');
+  document.getElementById('app').classList.remove('hide');
+  renderShell();
+  setupListeners();
+  goTo('pos');
+})();
+
+function renderShell() {
+  document.getElementById('userName').textContent = A.profile.name;
+  document.getElementById('userRole').textContent = 'Admin';
+  document.getElementById('drawerShop').textContent = A.profile.shop.shopName;
+  document.getElementById('drawerShopId').textContent = A.shopId;
+  document.getElementById('drawerUser').textContent = A.profile.name + ' · Admin';
+  updateBottomNav();
+}
+
+/* ── LISTENERS ── */
+function setupListeners() {
+  const sid = A.shopId;
+  const shopRef = TP.db.collection('shops').doc(sid);
+
+  A.unsubs.push(shopRef.collection('products').onSnapshot(s => {
+    A.products = s.docs.map(d => ({ id: d.id, ...d.data() })); renderCurrent();
+  }));
+  A.unsubs.push(shopRef.collection('customers').onSnapshot(s => {
+    A.customers = s.docs.map(d => ({ id: d.id, ...d.data() })); renderCurrent();
+  }));
+  A.unsubs.push(shopRef.collection('sales').orderBy('saleDate', 'desc').limit(500).onSnapshot(s => {
+    A.sales = s.docs.map(d => ({ id: d.id, ...d.data() })); renderCurrent();
+  }));
+  A.unsubs.push(shopRef.collection('payments').orderBy('paymentDate', 'desc').limit(500).onSnapshot(s => {
+    A.payments = s.docs.map(d => ({ id: d.id, ...d.data() }));
+  }));
+  A.unsubs.push(TP.db.collection('users').where('shopId', '==', sid).onSnapshot(s => {
+    A.users = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'salesmen') renderSalesmen();
+  }));
+  A.unsubs.push(shopRef.onSnapshot(s => {
+    if (s.exists) {
+      A.profile.shop = { shopId: sid, ...s.data() };
+      renderShell();
+      if (A.currentPage === 'settings') renderSettings();
+    }
+  }));
+  A.unsubs.push(shopRef.collection('expenses').orderBy('expenseDate', 'desc').limit(500).onSnapshot(s => {
+    A.expenses = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'expenses') renderExpenses();
+  }));
+  A.unsubs.push(shopRef.collection('purchases').orderBy('purchaseDate', 'desc').limit(500).onSnapshot(s => {
+    A.purchases = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'purchases') renderPurchases();
+  }));
+  A.unsubs.push(shopRef.collection('returns').orderBy('returnDate', 'desc').limit(500).onSnapshot(s => {
+    A.returns = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'returns') renderReturns();
+  }));
+  A.unsubs.push(shopRef.collection('shifts').orderBy('openedAt', 'desc').limit(50).onSnapshot(s => {
+    A.shifts = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'shift') renderShift();
+  }));
+  A.unsubs.push(shopRef.collection('activityLogs').orderBy('timestamp', 'desc').limit(500).onSnapshot(s => {
+    A.activityLogs = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'activity') renderActivityLog();
+  }));
+  A.unsubs.push(shopRef.collection('attendance').orderBy('timestamp', 'desc').limit(500).onSnapshot(s => {
+    A.attendance = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (A.currentPage === 'attendance') renderAttendance();
+  }));
+}
+
+/* ── NAVIGATION ── */
+const PAGE_TITLES = {
+  pos: 'Point of Sale', dashboard: 'Dashboard', sales: 'All Sales',
+  products: 'Products', inventory: 'Inventory', customers: 'Customers',
+  salesmen: 'Salesmen', purchases: 'Purchases', expenses: 'Expenses',
+  returns: 'Returns', shift: 'Cash Register', reports: 'Reports',
+  analytics: 'Analytics', activity: 'Activity Log', attendance: 'Attendance',
+  campaign: 'WhatsApp Campaign', settings: 'Settings',
+};
+
+function goTo(page) {
+  A.currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hide'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.remove('hide');
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[page] || page;
+  closeDrawer();
+  updateBottomNav();
+  renderCurrent();
+  window.scrollTo({ top: 0 });
+}
+
+function renderCurrent() {
+  if (!A.profile) return;
+  switch (A.currentPage) {
+    case 'pos': renderPOS(); break;
+    case 'dashboard': renderDashboard(); break;
+    case 'sales': renderSales(); break;
+    case 'products': renderProducts(); break;
+    case 'inventory': renderInventory(); break;
+    case 'customers': renderCustomers(); break;
+    case 'salesmen': renderSalesmen(); break;
+    case 'purchases': renderPurchases(); break;
+    case 'expenses': renderExpenses(); break;
+    case 'returns': renderReturns(); break;
+    case 'shift': renderShift(); break;
+    case 'reports': renderReports(); break;
+    case 'analytics': renderAnalytics(); break;
+    case 'activity': renderActivityLog(); break;
+    case 'attendance': renderAttendance(); break;
+    case 'campaign': renderCampaign(); break;
+    case 'settings': renderSettings(); break;
+  }
+  updateCartBar();
+}
+
+function updateBottomNav() {
+  const items = [
+    { p: 'pos', i: '🛒', l: 'POS' },
+    { p: 'dashboard', i: '📊', l: 'Dashboard' },
+    { p: 'sales', i: '🧾', l: 'Sales' },
+    { p: '__menu', i: '☰', l: 'Menu' },
+  ];
+  document.getElementById('bottomNav').innerHTML = items.map(it => `
+    <button data-nav="${it.p}" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition
+      ${A.currentPage === it.p ? 'text-blue-600' : 'text-gray-500'}">
+      <span class="text-[22px] leading-none">${it.i}</span>
+      <span>${it.l}</span>
+    </button>`).join('');
+  document.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.nav === '__menu') openDrawer();
+    else goTo(b.dataset.nav);
+  }));
+}
+
+function openDrawer() {
+  document.getElementById('drawer').classList.remove('-translate-x-full');
+  document.getElementById('drawerBackdrop').classList.remove('hide');
+  buildDrawerNav();
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.add('-translate-x-full');
+  document.getElementById('drawerBackdrop').classList.add('hide');
+}
+document.getElementById('drawerBackdrop').addEventListener('click', closeDrawer);
+document.getElementById('menuBtn').addEventListener('click', openDrawer);
+
+function buildDrawerNav() {
+  const items = [
+    { p: 'pos', i: '🛒', l: 'Point of Sale' },
+    { p: 'dashboard', i: '📊', l: 'Dashboard' },
+    { p: 'sales', i: '🧾', l: 'All Sales' },
+    { p: 'products', i: '📦', l: 'Products' },
+    { p: 'inventory', i: '🏪', l: 'Inventory' },
+    { p: 'customers', i: '🧑‍🤝‍🧑', l: 'Customers' },
+    { p: 'salesmen', i: '👥', l: 'Salesmen' },
+    { p: 'purchases', i: '📥', l: 'Purchases' },
+    { p: 'expenses', i: '💸', l: 'Expenses' },
+    { p: 'returns', i: '↩️', l: 'Returns' },
+    { p: 'shift', i: '💰', l: 'Cash Register' },
+    { p: 'reports', i: '📈', l: 'Reports' },
+    { p: 'analytics', i: '📊', l: 'Analytics' },
+    { p: 'attendance', i: '📅', l: 'Attendance' },
+    { p: 'activity', i: '📜', l: 'Activity Log' },
+    { p: 'campaign', i: '📢', l: 'Campaign' },
+    { p: 'settings', i: '⚙️', l: 'Settings' },
+  ];
+  document.getElementById('drawerNav').innerHTML = items.map(it => `
+    <button data-dnav="${it.p}" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left font-medium
+      ${A.currentPage === it.p ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}">
+      <span class="text-xl">${it.i}</span><span>${it.l}</span>
+    </button>`).join('') + `
+    <div class="border-t my-2"></div>
+    <button id="drawerLogout" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left font-medium text-red-600 hover:bg-red-50">
+      <span class="text-xl">🚪</span><span>Logout</span>
+    </button>`;
+  document.querySelectorAll('[data-dnav]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.dnav)));
+  document.getElementById('drawerLogout').addEventListener('click', async () => {
+    closeDrawer();
+    if (!await TP.askConfirm('Logout from this account?')) return;
+    if (A.scannerSessionId) { try { await TP.deleteScannerSession(A.scannerSessionId); } catch {} A.scannerSessionId = null; localStorage.removeItem('tp_scanner_session'); }
+    if (A.paymentSessionId) { try { await TP.deletePaymentSession(A.paymentSessionId); } catch {} A.paymentSessionId = null; localStorage.removeItem('tp_payment_session'); }
+    await TP.auth.signOut();
+  });
+}
+
+/* ============================================================
+   POS
+   ============================================================ */
+function renderPOS() {
+  const el = document.getElementById('page-pos');
+  const cats = [...new Set(A.products.map(p => p.category).filter(Boolean))];
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="flex gap-2">
+        <button id="typeRetail" class="flex-1 py-3 rounded-xl font-semibold text-sm transition">🏪 Retail</button>
+        <button id="typeWhole" class="flex-1 py-3 rounded-xl font-semibold text-sm transition">🏭 Wholesale</button>
+      </div>
+
+      <div class="flex gap-2">
+        <div class="relative flex-1 scan-pulse rounded-xl">
+          <input id="barcodeInput" type="text" inputmode="numeric" autocomplete="off"
+            placeholder="📷 Scan barcode or type..."
+            class="w-full px-4 py-4 rounded-xl border-2 border-dashed border-blue-500 bg-blue-50 focus:border-blue-700 focus:bg-white focus:outline-none text-base font-mono pr-12">
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] bg-blue-600 text-white px-2 py-1 rounded font-bold pointer-events-none">SCAN</div>
+        </div>
+        <button id="qrScanBtn" class="px-4 rounded-xl bg-blue-600 text-white font-bold text-2xl active:scale-95 transition" title="QR Scan">📱</button>
+      </div>
+
+      <input id="posSearch" type="search" placeholder="🔍 Search product..." value="${TP.esc(A.posSearch)}"
+        class="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
+
+      ${cats.length ? `
+      <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <button data-cat="" class="cat-chip flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap">All</button>
+        ${cats.map(c => `<button data-cat="${TP.esc(c)}" class="cat-chip flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap">${TP.esc(c)}</button>`).join('')}
+      </div>` : ''}
+
+      <div id="productGrid" class="grid grid-cols-2 gap-3 pb-2"></div>
+    </div>`;
+
+  const bcInput = document.getElementById('barcodeInput');
+  bcInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); handleBarcodeScan(e.target.value.trim()); e.target.value = ''; }
+  });
+  setTimeout(() => bcInput.focus(), 200);
+
+  document.getElementById('qrScanBtn').addEventListener('click', () => {
+    TP.openQRScanner(code => handleBarcodeScan(String(code).trim()));
+  });
+
+  document.getElementById('posSearch').addEventListener('input', e => { A.posSearch = e.target.value; renderProductGrid(); });
+  document.getElementById('typeRetail').addEventListener('click', () => { A.saleType = 'retail'; updateTypeButtons(); renderProductGrid(); });
+  document.getElementById('typeWhole').addEventListener('click', () => { A.saleType = 'wholesale'; updateTypeButtons(); renderProductGrid(); });
+  document.querySelectorAll('.cat-chip').forEach(b => b.addEventListener('click', () => { A.posCategory = b.dataset.cat; renderProductGrid(); }));
+  updateTypeButtons();
+  renderProductGrid();
+}
+
+function handleBarcodeScan(code) {
+  if (!code) return;
+  const product = A.products.find(p => String(p.barcode || '').trim() === code);
+  if (!product) { TP.toast('Barcode not found: ' + code, 'error'); return; }
+  if ((+product.stockQty || 0) <= 0) { TP.toast(product.name + ' — Out of stock!', 'error'); return; }
+  addToCart(product.id);
+  TP.toast('✓ ' + product.name, 'success');
+  const bc = document.getElementById('barcodeInput');
+  if (bc) bc.focus();
+}
+
+function updateTypeButtons() {
+  const r = document.getElementById('typeRetail'), w = document.getElementById('typeWhole');
+  const on = 'bg-blue-600 text-white shadow-lg', off = 'bg-white text-gray-600 border-2 border-gray-200';
+  r.className = `flex-1 py-3 rounded-xl font-semibold text-sm transition ${A.saleType==='retail'?on:off}`;
+  w.className = `flex-1 py-3 rounded-xl font-semibold text-sm transition ${A.saleType==='wholesale'?on:off}`;
+}
+
+function renderProductGrid() {
+  const g = document.getElementById('productGrid');
+  if (!g) return;
+  const q = A.posSearch.trim().toLowerCase();
+  const list = A.products.filter(p => {
+    if (A.posCategory && p.category !== A.posCategory) return false;
+    if (!q) return true;
+    return (p.name||'').toLowerCase().includes(q) || (p.barcode||'').includes(q);
+  });
+  document.querySelectorAll('.cat-chip').forEach(b => {
+    const on = b.dataset.cat === A.posCategory;
+    b.className = `cat-chip flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap ${on ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'}`;
+  });
+  if (!list.length) {
+    g.innerHTML = `<div class="col-span-2 text-center text-gray-400 py-16"><div class="text-5xl mb-3">📦</div><div>No products yet</div>
+      <button onclick="goTo('products')" class="mt-3 text-blue-600 underline text-sm">Add a product</button></div>`;
+    return;
+  }
+  g.innerHTML = list.map(p => {
+    const price = A.saleType === 'retail' ? (+p.retailPrice||0) : (+p.wholesalePrice||0);
+    const stock = +p.stockQty || 0;
+    const out = stock <= 0, low = !out && stock <= (+p.lowStockAlert||0);
+    return `<button data-add="${p.id}" class="text-left bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 active:scale-95 transition ${out?'opacity-50':''}">
+      ${p.imageUrl ? `<img src="${TP.esc(p.imageUrl)}" class="w-full h-20 object-cover rounded-lg mb-2" onerror="this.style.display='none'">` : ''}
+      <div class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 min-h-[2.6rem]">${TP.esc(p.name)}</div>
+      ${p.barcode ? `<div class="text-[9px] text-gray-400 font-mono truncate">#${TP.esc(p.barcode)}</div>` : ''}
+      <div class="text-[11px] mt-1 font-medium ${out?'text-red-600':low?'text-orange-500':'text-gray-500'}">
+        Stock: ${stock} ${TP.esc(p.unit||'')}${out?' · out':low?' · low':''}
+      </div>
+      <div class="text-blue-600 font-extrabold mt-1.5 text-[17px]">${TP.money(price)}</div>
+    </button>`;
+  }).join('');
+  g.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addToCart(b.dataset.add)));
+}
+
+function addToCart(pid) {
+  const p = A.products.find(x => x.id === pid);
+  if (!p) return;
+  const price = A.saleType === 'retail' ? (+p.retailPrice||0) : (+p.wholesalePrice||0);
+  const exist = A.cart.find(it => it.productId === pid);
+  const inCart = exist ? exist.qty : 0;
+  if (inCart + 1 > (+p.stockQty||0)) { TP.toast('Out of stock!', 'error'); return; }
+  if (exist) exist.qty++;
+  else A.cart.push({ productId: pid, name: p.name, unit: p.unit||'', price, qty: 1 });
+  updateCartBar();
+}
+
+function updateCartBar() {
+  const bar = document.getElementById('cartBar');
+  if (!bar) return;
+  const count = A.cart.reduce((a, it) => a + it.qty, 0);
+  const total = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  if (count === 0 || A.currentPage !== 'pos') { bar.classList.add('hide'); return; }
+  bar.classList.remove('hide');
+  document.getElementById('cartCount').textContent = count;
+  document.getElementById('cartTotal').textContent = TP.money(total);
+}
+
+document.getElementById('openCartBtn').addEventListener('click', openCart);
+
+function openCart() {
+  if (!A.cart.length) { TP.toast('Cart is empty', 'warn'); return; }
+  A.custMode = 'walkin'; A.custId = '';
+  renderCartItems(); renderCartCheckout(); openModal('cartModal');
+}
+
+function renderCartItems() {
+  const el = document.getElementById('cartItems');
+  if (!el) return;
+  if (!A.cart.length) { el.innerHTML = `<div class="text-center text-gray-400 py-10">Cart is empty</div>`; return; }
+  el.innerHTML = A.cart.map((it, i) => `
+    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3 fade-in">
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm truncate">${TP.esc(it.name)}</div>
+        <div class="text-xs text-gray-500 mt-0.5">${TP.money(it.price)} × ${it.qty} ${TP.esc(it.unit)} = <b>${TP.money(it.price*it.qty)}</b></div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button data-dec="${i}" class="w-9 h-9 rounded-lg bg-white border border-gray-200 font-bold text-lg active:scale-90">−</button>
+        <span class="w-7 text-center font-bold text-sm">${it.qty}</span>
+        <button data-inc="${i}" class="w-9 h-9 rounded-lg bg-white border border-gray-200 font-bold text-lg active:scale-90">+</button>
+        <button data-rm="${i}" class="w-9 h-9 rounded-lg bg-red-50 text-red-600 font-bold active:scale-90">✕</button>
+      </div>
+    </div>`).join('');
+  el.innerHTML += `
+    <div class="pt-3 border-t border-gray-100 mt-3 flex gap-2">
+      <button id="holdCartBtn" class="flex-1 bg-yellow-50 text-yellow-700 py-2.5 rounded-xl text-xs font-bold">⏸ Hold Sale</button>
+      <button id="showHeldBtn" class="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-xs font-bold">📋 Held (${TP.getHeldCarts().filter(c=>c.shopId===A.shopId).length})</button>
+    </div>`;
+  document.getElementById('holdCartBtn')?.addEventListener('click', holdCurrentSale);
+  document.getElementById('showHeldBtn')?.addEventListener('click', showHeldSalesModal);
+
+  el.querySelectorAll('[data-inc]').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.inc, it = A.cart[i];
+    const p = A.products.find(x => x.id === it.productId);
+    if (it.qty + 1 > (+p?.stockQty || 0)) { TP.toast('Out of stock!', 'error'); return; }
+    it.qty++; renderCartItems(); updateSummary();
+  }));
+  el.querySelectorAll('[data-dec]').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.dec, it = A.cart[i];
+    if (it.qty > 1) it.qty--; else A.cart.splice(i, 1);
+    renderCartItems(); updateSummary();
+    if (!A.cart.length) closeModal('cartModal');
+  }));
+  el.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => {
+    A.cart.splice(+b.dataset.rm, 1);
+    renderCartItems(); updateSummary();
+    if (!A.cart.length) closeModal('cartModal');
+  }));
+}
+
+function renderCartCheckout() {
+  const el = document.getElementById('cartCheckout');
+  if (!el) return;
+  const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  const st = A.profile.shop.settings || {};
+  const hasUPI = !!st.upiId;
+  el.innerHTML = `
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-bold text-gray-600 mb-2 block">Customer</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button data-cm="walkin" class="cm-btn py-2.5 rounded-xl text-xs font-semibold transition">🚶 Walk-in</button>
+          <button data-cm="existing" class="cm-btn py-2.5 rounded-xl text-xs font-semibold transition">👤 Existing</button>
+          <button data-cm="new" class="cm-btn py-2.5 rounded-xl text-xs font-semibold transition">🆕 New</button>
+        </div>
+        <div id="cmExtra" class="mt-2"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-bold text-gray-600">Discount (₹)</label>
+          <input id="discountInput" type="number" min="0" step="1" value="0" class="no-spin w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mt-1 focus:border-blue-500 focus:outline-none"></div>
+        <div><label class="text-xs font-bold text-gray-600">Paid (₹)</label>
+          <input id="paidInput" type="number" min="0" step="1" value="${subtotal}" class="no-spin w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mt-1 focus:border-blue-500 focus:outline-none"></div>
+      </div>
+      <div class="flex gap-1.5 flex-wrap">
+        <span class="text-[10px] text-gray-500 self-center mr-1">Quick discount:</span>
+        <button data-disc-pct="5" class="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-[11px] font-semibold">5%</button>
+        <button data-disc-pct="10" class="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-[11px] font-semibold">10%</button>
+        <button data-disc-pct="15" class="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-[11px] font-semibold">15%</button>
+        <button data-disc-flat="50" class="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-[11px] font-semibold">₹50</button>
+        <button data-disc-flat="100" class="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-[11px] font-semibold">₹100</button>
+        <button id="discClear" class="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 text-[11px] font-semibold">Clear</button>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button data-quick="${subtotal}" class="quick-pay flex-1 min-w-[70px] bg-gray-100 py-2 rounded-lg text-xs font-semibold">Full</button>
+        <button data-quick="500" class="quick-pay flex-1 min-w-[70px] bg-gray-100 py-2 rounded-lg text-xs font-semibold">500</button>
+        <button data-quick="1000" class="quick-pay flex-1 min-w-[70px] bg-gray-100 py-2 rounded-lg text-xs font-semibold">1000</button>
+      </div>
+      <div><label class="text-xs font-bold text-gray-600">Payment Method</label>
+        <select id="payMethod" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mt-1 focus:border-blue-500 focus:outline-none">
+          <option value="cash">💵 Cash</option>
+          <option value="bkash">📱 bKash</option>
+          <option value="card">💳 Card</option>
+          <option value="bank">🏦 Bank</option>
+          <option value="upi" ${hasUPI ? '' : 'disabled'}>💳 UPI QR ${hasUPI ? '' : '(not set)'}</option>
+          <option value="credit">📝 Credit</option>
+        </select></div>
+      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 space-y-1.5 text-sm border border-blue-100">
+        <div class="flex justify-between"><span class="text-gray-600">Subtotal</span><span id="sumSub" class="font-medium">${TP.money(subtotal)}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Discount</span><span id="sumDisc" class="font-medium text-orange-600">- ${TP.money(0)}</span></div>
+        <div class="flex justify-between font-extrabold text-lg text-blue-600 border-t border-blue-200 pt-1.5 mt-1"><span>Total</span><span id="sumTotal">${TP.money(subtotal)}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Paid</span><span id="sumPaid" class="font-medium text-green-600">${TP.money(subtotal)}</span></div>
+        <div class="flex justify-between font-bold text-red-600"><span>Due</span><span id="sumDue">${TP.money(0)}</span></div>
+        <div class="flex justify-between font-bold text-blue-700 border-t border-blue-200 pt-1.5 mt-1"><span>Change</span><span id="sumChange">${TP.money(0)}</span></div>
+      </div>
+      <button id="splitPayBtn" class="w-full bg-purple-50 text-purple-700 py-2.5 rounded-xl font-bold text-sm">💳 Split Payment</button>
+      <button id="checkoutBtn" class="w-full bg-green-600 text-white py-4 rounded-2xl font-extrabold text-base shadow-lg active:scale-[.98] transition disabled:opacity-60">✓ Complete Sale</button>
+    </div>`;
+
+  el.querySelectorAll('.cm-btn').forEach(b => b.addEventListener('click', () => { A.custMode = b.dataset.cm; renderCmButtons(); renderCmExtra(); }));
+  el.querySelectorAll('.quick-pay').forEach(b => b.addEventListener('click', () => {
+    document.getElementById('paidInput').value = b.dataset.quick; updateSummary();
+  }));
+  el.querySelectorAll('[data-disc-pct]').forEach(b => b.addEventListener('click', () => {
+    const disc = TP.applyDiscountPreset(subtotal, { type:'pct', value:+b.dataset.discPct });
+    document.getElementById('discountInput').value = disc.toFixed(2);
+    updateSummary();
+  }));
+  el.querySelectorAll('[data-disc-flat]').forEach(b => b.addEventListener('click', () => {
+    const disc = TP.applyDiscountPreset(subtotal, { type:'flat', value:+b.dataset.discFlat });
+    document.getElementById('discountInput').value = disc.toFixed(2);
+    updateSummary();
+  }));
+  document.getElementById('discClear')?.addEventListener('click', () => {
+    document.getElementById('discountInput').value = '0';
+    updateSummary();
+  });
+  renderCmButtons(); renderCmExtra();
+  document.getElementById('discountInput').addEventListener('input', updateSummary);
+  document.getElementById('paidInput').addEventListener('input', updateSummary);
+  document.getElementById('splitPayBtn').addEventListener('click', () => openSplitPaymentModal());
+  document.getElementById('checkoutBtn').addEventListener('click', completeSale);
+  updateSummary();
+}
+
+function renderCmButtons() {
+  document.querySelectorAll('.cm-btn').forEach(b => {
+    const on = 'bg-blue-600 text-white shadow-md', off = 'bg-gray-100 text-gray-600';
+    b.className = `cm-btn py-2.5 rounded-xl text-xs font-semibold transition ${A.custMode === b.dataset.cm ? on : off}`;
+  });
+}
+function renderCmExtra() {
+  const el = document.getElementById('cmExtra');
+  if (!el) return;
+  if (A.custMode === 'existing') {
+    el.innerHTML = `<select id="custSelect" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <option value="">-- Select customer --</option>
+      ${A.customers.map(c => `<option value="${c.id}">${TP.esc(c.name)}${c.phone?' · '+TP.esc(c.phone):''}${(+c.due||0)>0?' (Due '+TP.money(c.due)+')':''}</option>`).join('')}
+    </select>`;
+    document.getElementById('custSelect').addEventListener('change', e => A.custId = e.target.value);
+  } else if (A.custMode === 'new') {
+    el.innerHTML = `<div class="space-y-2 fade-in">
+      <input id="newCustName" placeholder="Customer name *" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <input id="newCustPhone" placeholder="Mobile" inputmode="tel" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+    </div>`;
+  } else el.innerHTML = '';
+}
+
+function updateSummary() {
+  const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  const discount = +((document.getElementById('discountInput')||{}).value || 0);
+  const total = Math.max(0, subtotal - discount);
+  let paid = (document.getElementById('paidInput')||{}).value;
+  paid = paid === '' ? total : +paid;
+  const due = Math.max(0, total - paid);
+  const change = Math.max(0, paid - total);
+  document.getElementById('sumSub').textContent = TP.money(subtotal);
+  document.getElementById('sumDisc').textContent = '- ' + TP.money(discount);
+  document.getElementById('sumTotal').textContent = TP.money(total);
+  document.getElementById('sumPaid').textContent = TP.money(paid);
+  document.getElementById('sumDue').textContent = TP.money(due);
+  document.getElementById('sumChange').textContent = TP.money(change);
+}
+
+async function completeSale() {
+  if (!A.cart.length) { TP.toast('Cart is empty', 'error'); return; }
+  const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  const discount = +((document.getElementById('discountInput')||{}).value || 0);
+  const total = Math.max(0, subtotal - discount);
+  let paidVal = (document.getElementById('paidInput')||{}).value;
+  const paid = paidVal === '' ? total : (+paidVal || 0);
+  const due = Math.max(0, total - paid);
+  const method = (document.getElementById('payMethod')||{}).value || 'cash';
+  const btn = document.getElementById('checkoutBtn');
+
+  let splitPayments = null;
+  if (window._splitPayments && window._splitPayments.length) {
+    splitPayments = window._splitPayments;
+    window._splitPayments = null;
+  }
+
+  // UPI payment flow
+  if (method === 'upi') {
+    const st = A.profile.shop.settings || {};
+    if (!st.upiId) { TP.toast('Set UPI ID in Settings first', 'error'); return; }
+    let paidConfirm = false;
+    if (A.paymentSessionId) {
+      try {
+        btn.disabled = true;
+        btn.textContent = '📱 Sending to device...';
+        const reqRef = await TP.createPaymentRequest(A.paymentSessionId, {
+          amount: paid || total,
+          invoiceNo: 'Pending',
+        });
+        const result = await showPaymentWaitModal({
+          reqRef, amount: paid || total,
+          shopName: st.shopName || A.profile.shop.shopName,
+        });
+        if (result === 'paid') { paidConfirm = true; TP.toast('✓ Payment confirmed', 'success'); }
+        else { TP.toast('Payment cancelled', 'warn'); btn.disabled = false; btn.textContent = '✓ Complete Sale'; return; }
+      } catch (e) {
+        console.error(e);
+        TP.toast('Could not reach device — using in-app QR', 'warn');
+      }
+    }
+    if (!paidConfirm) {
+      const payResult = await TP.showUPIPaymentModal({
+        upiId: st.upiId, upiName: st.upiName,
+        amount: paid || total, invoiceNo: 'Pending',
+        shopName: st.shopName || A.profile.shop.shopName,
+      });
+      if (payResult !== 'received') {
+        TP.toast('Payment cancelled', 'warn');
+        btn.disabled = false; btn.textContent = '✓ Complete Sale';
+        return;
+      }
+    }
+  }
+
+  btn.disabled = true; btn.textContent = 'Processing...';
+
+  try {
+    const shopRef = TP.db.collection('shops').doc(A.shopId);
+    let customerId = null, customerName = 'Walk-in Customer', customerPhone = '';
+    let newCustomerRef = null;
+    if (A.custMode === 'existing') {
+      const cid = (document.getElementById('custSelect')||{}).value || A.custId;
+      if (!cid) throw new Error('Select a customer');
+      const c = A.customers.find(x => x.id === cid);
+      if (c) { customerId = c.id; customerName = c.name; customerPhone = c.phone || ''; }
+    } else if (A.custMode === 'new') {
+      const name = ((document.getElementById('newCustName')||{}).value || '').trim();
+      const phone = ((document.getElementById('newCustPhone')||{}).value || '').trim();
+      if (!name) throw new Error('Customer name required');
+      newCustomerRef = shopRef.collection('customers').doc();
+      customerId = newCustomerRef.id; customerName = name; customerPhone = phone;
+    }
+    const tk = TP.todayKey();
+    const todayInvoices = A.sales.filter(s => (s.invoiceNo||'').includes('-' + tk + '-'));
+    const maxSeq = todayInvoices.reduce((m, s) => Math.max(m, parseInt((s.invoiceNo||'').split('-').pop(), 10) || 0), 0);
+    const invoiceNo = `INV-${tk}-${String(maxSeq + 1).padStart(4, '0')}`;
+    const batch = TP.db.batch();
+    const saleRef = shopRef.collection('sales').doc();
+    for (const it of A.cart) {
+      const p = A.products.find(x => x.id === it.productId);
+      if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty||0) - it.qty });
+    }
+    if (newCustomerRef) batch.set(newCustomerRef, { name: customerName, phone: customerPhone, address: '', due: due, loyaltyPoints: 0, createdAt: TP.FV.serverTimestamp() });
+    else if (customerId && due > 0) {
+      const c = A.customers.find(x => x.id === customerId);
+      if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) + due });
+    }
+    batch.set(saleRef, {
+      invoiceNo, customerId, customerName, customerPhone,
+      salesmanId: A.profile.uid, salesmanName: A.profile.name,
+      type: A.saleType, items: A.cart.map(it => ({...it})),
+      subtotal, discount, total, paid, due,
+      paymentMethod: method,
+      splitPayments: splitPayments,
+      saleDate: TP.FV.serverTimestamp(),
+    });
+    await batch.commit();
+    const sale = {
+      id: saleRef.id, invoiceNo, customerId, customerName, customerPhone,
+      salesmanId: A.profile.uid, salesmanName: A.profile.name,
+      type: A.saleType, items: A.cart.map(it => ({...it})),
+      subtotal, discount, total, paid, due,
+      paymentMethod: method, splitPayments,
+      saleDate: new Date(),
+    };
+
+    // Loyalty points
+    const pointsEarned = TP.calculateLoyaltyEarn(total);
+    if (customerId && pointsEarned > 0) {
+      try {
+        const c = A.customers.find(x => x.id === customerId);
+        if (c) {
+          await shopRef.collection('customers').doc(c.id).update({
+            loyaltyPoints: (+c.loyaltyPoints || 0) + pointsEarned
+          });
+          await shopRef.collection('loyaltyTransactions').add({
+            customerId, customerName, points: pointsEarned, type: 'earn',
+            invoiceNo, timestamp: TP.FV.serverTimestamp(),
+          });
+        }
+      } catch (e) { console.warn('loyalty:', e); }
+    }
+
+    // Commission
+    const commRate = +A.profile.commissionRate || 0;
+    if (commRate > 0) {
+      const comm = TP.calculateCommission(total, commRate);
+      await shopRef.collection('sales').doc(saleRef.id).update({
+        commissionAmount: comm, commissionRate: commRate
+      });
+    }
+
+    // Activity log
+    TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'SALE', `${invoiceNo} · ₹${total}`);
+
+    // Attendance
+    try {
+      await shopRef.collection('attendance').add({
+        userId: A.profile.uid, userName: A.profile.name, role: 'admin',
+        action: 'SALE', timestamp: TP.FV.serverTimestamp(),
+        meta: { invoiceNo, total },
+      });
+    } catch (e) {}
+
+    A.cart = [];
+    closeModal('cartModal');
+    setTimeout(() => showInvoice(sale), 200);
+    TP.toast('Sale completed!', 'success');
+  } catch (err) {
+    console.error(err);
+    TP.toast(err.message || 'Sale failed', 'error');
+    btn.disabled = false; btn.textContent = '✓ Complete Sale';
+  }
+}
+
+/* ── SPLIT PAYMENT ── */
+function openSplitPaymentModal() {
+  const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  const discount = +((document.getElementById('discountInput')||{}).value || 0);
+  const total = Math.max(0, subtotal - discount);
+
+  const old = document.getElementById('_splitModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_splitModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:22px;max-width:420px;width:100%;padding:22px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="font-weight:800;font-size:17px;margin:0">💳 Split Payment</h3>
+        <button id="_splitClose" style="background:#f3f4f6;border:none;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">×</button>
+      </div>
+      <div style="background:#f5f3ff;border-radius:12px;padding:12px;margin-bottom:12px;text-align:center">
+        <div style="font-size:11px;color:#6b7280">Total</div>
+        <div style="font-size:24px;font-weight:800;color:#7c3aed">${TP.money(total)}</div>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Payment 1</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <select id="_sp1m" style="flex:1;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit">
+          <option value="cash">💵 Cash</option>
+          <option value="upi">💳 UPI</option>
+          <option value="bkash">📱 bKash</option>
+          <option value="card">💳 Card</option>
+          <option value="bank">🏦 Bank</option>
+        </select>
+        <input id="_sp1a" type="number" min="0" step="1" placeholder="Amount" style="flex:1;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit">
+      </div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Payment 2 (optional)</label>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <select id="_sp2m" style="flex:1;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit">
+          <option value="">-- None --</option>
+          <option value="cash">💵 Cash</option>
+          <option value="upi">💳 UPI</option>
+          <option value="bkash">📱 bKash</option>
+          <option value="card">💳 Card</option>
+          <option value="bank">🏦 Bank</option>
+        </select>
+        <input id="_sp2a" type="number" min="0" step="1" placeholder="Amount" style="flex:1;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit">
+      </div>
+      <div id="_splitSummary" style="background:#f9fafb;border-radius:10px;padding:10px;font-size:12px;margin-bottom:12px"></div>
+      <button id="_splitApply" style="width:100%;background:#7c3aed;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:700;font-size:15px;cursor:pointer">Apply Split</button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const updateSplitSummary = () => {
+    const a1 = +document.getElementById('_sp1a').value || 0;
+    const a2 = +document.getElementById('_sp2a').value || 0;
+    const paid = a1 + a2;
+    const due = Math.max(0, total - paid);
+    const change = Math.max(0, paid - total);
+    document.getElementById('_splitSummary').innerHTML = `
+      <div style="display:flex;justify-content:space-between"><span>Paid:</span><b>₹${paid.toFixed(2)}</b></div>
+      <div style="display:flex;justify-content:space-between;color:#dc2626"><span>Due:</span><b>₹${due.toFixed(2)}</b></div>
+      ${change>0?`<div style="display:flex;justify-content:space-between;color:#16a34a"><span>Change:</span><b>₹${change.toFixed(2)}</b></div>`:''}
+    `;
+  };
+  document.getElementById('_sp1a').addEventListener('input', updateSplitSummary);
+  document.getElementById('_sp2a').addEventListener('input', updateSplitSummary);
+  updateSplitSummary();
+
+  document.getElementById('_splitClose').onclick = () => modal.remove();
+  document.getElementById('_splitApply').onclick = () => {
+    const a1 = +document.getElementById('_sp1a').value || 0;
+    const a2 = +document.getElementById('_sp2a').value || 0;
+    const m1 = document.getElementById('_sp1m').value;
+    const m2 = document.getElementById('_sp2m').value;
+    const paid = a1 + a2;
+    if (paid <= 0) { TP.toast('Enter payment amount', 'error'); return; }
+    if (paid > total) { TP.toast('Paid exceeds total', 'error'); return; }
+    const payments = [];
+    if (a1 > 0) payments.push({ method: m1, amount: a1 });
+    if (a2 > 0 && m2) payments.push({ method: m2, amount: a2 });
+    window._splitPayments = payments;
+    document.getElementById('paidInput').value = paid.toFixed(2);
+    modal.remove();
+    updateSummary();
+    TP.toast('Split applied · ' + payments.length + ' payments', 'success');
+  };
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+/* ── HOLD SALE ── */
+async function holdCurrentSale() {
+  if (!A.cart.length) { TP.toast('Cart is empty', 'warn'); return; }
+  const note = prompt('Note (customer name / reason):', '') || '';
+  TP.holdCart(A.cart, A.saleType, note, A.shopId);
+  A.cart = [];
+  closeModal('cartModal');
+  renderCurrent();
+  TP.toast('Sale held', 'success');
+}
+
+function showHeldSalesModal() {
+  const list = TP.getHeldCarts().filter(c => c.shopId === A.shopId);
+  const old = document.getElementById('_heldModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_heldModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;max-width:420px;width:100%;padding:20px;max-height:80vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 style="font-weight:800;font-size:17px;margin:0">📋 Held Sales</h3>
+        <button id="_heldClose" style="background:#f3f4f6;border:none;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">×</button>
+      </div>
+      ${list.length ? list.map(h => `
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${(h.note || 'Untitled').replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:8px">${h.items.length} items · ${new Date(h.createdAt).toLocaleString()}</div>
+          <div style="display:flex;gap:8px">
+            <button data-resume="${h.id}" style="flex:1;background:#16a34a;color:#fff;padding:8px;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Resume</button>
+            <button data-del-hold="${h.id}" style="background:#fef2f2;color:#dc2626;padding:8px 14px;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">🗑</button>
+          </div>
+        </div>`).join('') : '<div style="text-align:center;color:#9ca3af;padding:30px;font-size:13px">No held sales</div>'}
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('_heldClose').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelectorAll('[data-resume]').forEach(b => b.addEventListener('click', () => {
+    const h = list.find(x => x.id === b.dataset.resume);
+    if (!h) return;
+    if (A.cart.length && !confirm('Replace current cart?')) return;
+    A.cart = h.items.map(it => ({ ...it }));
+    A.saleType = h.saleType;
+    TP.deleteHeldCart(h.id);
+    modal.remove();
+    renderCurrent();
+    openModal('cartModal');
+    renderCartItems(); renderCartCheckout();
+    updateCartBar();
+    TP.toast('Sale resumed', 'success');
+  }));
+  modal.querySelectorAll('[data-del-hold]').forEach(b => b.addEventListener('click', () => {
+    TP.deleteHeldCart(b.dataset.delHold);
+    modal.remove();
+    showHeldSalesModal();
+    renderCurrent();
+  }));
+}
+
+/* ── PAYMENT WAIT MODAL ── */
+function showPaymentWaitModal({ reqRef, amount, shopName }) {
+  return new Promise(resolve => {
+    const old = document.getElementById('_payWaitModal');
+    if (old) old.remove();
+    const modal = document.createElement('div');
+    modal.id = '_payWaitModal';
+    modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif`;
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:24px;max-width:400px;width:100%;padding:24px;text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.5)">
+        <div style="font-size:44px;margin-bottom:6px">💳</div>
+        <h3 style="font-weight:800;font-size:19px;margin:0 0 4px;color:#111">Customer is paying</h3>
+        <p style="color:#6b7280;font-size:12px;margin:0 0 14px">QR is shown on the payment device</p>
+        <div style="background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:16px;padding:16px;margin-bottom:12px">
+          <div style="font-size:11px;opacity:.85">Amount</div>
+          <div style="font-size:32px;font-weight:800;letter-spacing:.5px">${TP.money(amount)}</div>
+        </div>
+        <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:12px;padding:10px;font-size:12px;color:#92400e;margin-bottom:14px;text-align:left;line-height:1.5">
+          ⚠️ Check your UPI app and confirm only when payment is received
+        </div>
+        <div style="display:flex;gap:8px;flex-direction:column">
+          <button id="_payWaitConfirm" style="background:#16a34a;color:#fff;padding:16px;border:none;border-radius:14px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;box-shadow:0 6px 18px rgba(22,163,74,.4)">
+            ✓ Payment Received
+          </button>
+          <button id="_payWaitCancel" style="background:#f3f4f6;color:#374151;padding:13px;border:none;border-radius:14px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer">
+            ✕ Cancel Payment
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('_payWaitConfirm').onclick = async () => {
+      const btn = document.getElementById('_payWaitConfirm');
+      btn.disabled = true; btn.textContent = 'Confirming...';
+      try {
+        await TP.confirmPaymentRequest(reqRef);
+        modal.remove();
+        resolve('paid');
+      } catch (e) {
+        console.error(e);
+        btn.disabled = false; btn.textContent = '✓ Payment Received';
+      }
+    };
+    document.getElementById('_payWaitCancel').onclick = async () => {
+      try { await TP.cancelPaymentRequest(reqRef); } catch (e) {}
+      modal.remove();
+      resolve('cancelled');
+    };
+  });
+}
+
+/* ============================================================
+   INVOICE
+   ============================================================ */
+const payLabel = m => ({ cash:'Cash', bkash:'bKash', card:'Card', bank:'Bank', upi:'UPI', credit:'Credit', split:'Split' }[m] || m);
+
+function showInvoice(sale) {
+  const st = A.profile.shop.settings || {};
+  const rows = sale.items.map((it, i) => `
+    <tr class="border-b border-gray-100">
+      <td class="py-2.5 text-center text-sm text-gray-500">${i+1}</td>
+      <td class="py-2.5 text-sm font-medium">${TP.esc(it.name)}</td>
+      <td class="py-2.5 text-right text-sm">${it.qty} ${TP.esc(it.unit||'')}</td>
+      <td class="py-2.5 text-right text-sm">${TP.money(it.price)}</td>
+      <td class="py-2.5 text-right text-sm font-bold">${TP.money(it.qty*it.price)}</td>
+    </tr>`).join('');
+  document.getElementById('invoiceBody').innerHTML = `
+    <div class="text-center border-b-2 border-blue-600 pb-3 mb-4">
+      <h2 class="text-2xl font-extrabold text-blue-600">${TP.esc(st.shopName || A.profile.shop.shopName)}</h2>
+      ${st.shopAddress ? `<p class="text-xs text-gray-500 mt-1">${TP.esc(st.shopAddress)}</p>` : ''}
+      ${st.shopPhone ? `<p class="text-xs text-gray-500">📞 ${TP.esc(st.shopPhone)}</p>` : ''}
+      ${st.gstin ? `<p class="text-[10px] text-gray-500 font-mono mt-1">GSTIN: ${TP.esc(st.gstin)}</p>` : ''}
+      <p class="text-[10px] text-gray-400 mt-1">Shop ID: <b class="font-mono">${TP.esc(A.shopId)}</b></p>
+    </div>
+    <div class="grid grid-cols-2 gap-3 text-xs mb-4">
+      <div class="space-y-1">
+        <p><span class="text-gray-500">Invoice:</span> <b class="font-mono">${TP.esc(sale.invoiceNo)}</b></p>
+        <p><span class="text-gray-500">Date:</span> <b>${TP.fmtDate(sale.saleDate)}</b></p>
+        <p><span class="text-gray-500">Salesman:</span> <b>${TP.esc(sale.salesmanName)}</b></p>
+      </div>
+      <div class="space-y-1 text-right">
+        <p><span class="text-gray-500">Customer:</span> <b>${TP.esc(sale.customerName)}</b></p>
+        ${sale.customerPhone ? `<p><span class="text-gray-500">Mobile:</span> <b>${TP.esc(sale.customerPhone)}</b></p>` : ''}
+        <p><span class="text-gray-500">Type:</span> <b>${sale.type === 'retail' ? 'Retail' : 'Wholesale'}</b></p>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full"><thead><tr class="bg-gray-100 text-[11px] text-gray-600">
+        <th class="py-2.5 text-center rounded-l-lg w-8">#</th><th class="py-2.5 text-left">Item</th>
+        <th class="py-2.5 text-right">Qty</th><th class="py-2.5 text-right">Price</th>
+        <th class="py-2.5 text-right rounded-r-lg">Total</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    <div class="mt-5 ml-auto max-w-[260px] space-y-1.5 text-sm">
+      <div class="flex justify-between"><span class="text-gray-600">Subtotal</span><span class="font-medium">${TP.money(sale.subtotal)}</span></div>
+      <div class="flex justify-between"><span class="text-gray-600">Discount</span><span class="font-medium text-orange-600">- ${TP.money(sale.discount)}</span></div>
+      <div class="flex justify-between font-extrabold text-lg border-t-2 border-blue-600 pt-2 text-blue-600"><span>Total</span><span>${TP.money(sale.total)}</span></div>
+      <div class="flex justify-between"><span class="text-gray-600">Paid</span><span class="font-medium text-green-600">${TP.money(sale.paid)}</span></div>
+      <div class="flex justify-between font-bold text-red-600"><span>Due</span><span>${TP.money(sale.due)}</span></div>
+    </div>
+    <div class="mt-5 flex justify-center">
+      <div class="text-center">
+        <div id="invQRCode" style="display:inline-block;padding:8px;background:#fff;border-radius:10px;border:1px solid #e5e7eb"></div>
+        <p class="text-[10px] text-gray-400 mt-1">Invoice verification QR</p>
+      </div>
+    </div>
+    <div class="mt-5 text-center text-xs text-gray-500">
+      <p>Payment: <b>${TP.esc(payLabel(sale.paymentMethod))}</b></p>
+      <p class="mt-3 text-base">Thank you! Visit again 🙏</p>
+    </div>`;
+  A.currentInvoice = sale;
+  openModal('invoiceModal');
+
+  (async () => {
+    try {
+      const invQRText = `${A.shopId}|${sale.invoiceNo}|${sale.total}`;
+      const url = await TP.generateQRDataURL(invQRText, 300);
+      const el = document.getElementById('invQRCode');
+      if (el) el.innerHTML = `<img src="${url}" style="width:110px;height:110px;display:block">`;
+    } catch {}
+  })();
+
+  document.getElementById('waInvoice').onclick = () => {
+    const st = A.profile.shop.settings || {};
+    if (!sale.customerPhone) { TP.toast('Customer phone not available', 'warn'); return; }
+    TP.openWhatsApp(sale.customerPhone, TP.buildInvoiceMessage(sale, st));
+  };
+}
+
+document.getElementById('printThermal').addEventListener('click', () => A.currentInvoice && printInvoice(A.currentInvoice, 'thermal'));
+document.getElementById('printA4').addEventListener('click', () => A.currentInvoice && printInvoice(A.currentInvoice, 'a4'));
+
+function invoiceDoc(sale, format) {
+  const st = A.profile.shop.settings || {};
+  const isT = format === 'thermal';
+  const rows = sale.items.map((it, i) => `<tr><td class="c">${i+1}</td><td>${TP.esc(it.name)}</td><td class="r">${it.qty}</td><td class="r">${it.price}</td><td class="r">${(it.qty*it.price).toFixed(2)}</td></tr>`).join('');
+  const css = isT ? `@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{width:74mm;font-family:Inter,sans-serif;font-size:11px;margin:0}.head{text-align:center}.head h1{font-size:16px;margin:0}.head p{margin:1px 0;font-size:10px}.meta{font-size:10px;margin:5px 0}.meta p{margin:1px 0}table{width:100%;border-collapse:collapse}th,td{padding:2px 1px;font-size:10px}th{border-bottom:1px solid #000;text-align:left}.c{text-align:center}.r{text-align:right}.totals{margin-top:5px;font-size:11px}.totals div{display:flex;justify-content:space-between}.totals .grand{font-weight:bold;border-top:1px solid #000;padding-top:3px;margin-top:3px;font-size:13px}.foot{text-align:center;margin-top:8px;font-size:10px}`
+    : `@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:Inter,sans-serif;font-size:13px;margin:0}.head{text-align:center;border-bottom:2px solid #2563eb;padding-bottom:12px;margin-bottom:16px}.head h1{font-size:28px;margin:0;color:#2563eb}.head p{margin:3px 0;color:#555}.meta{display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px}.meta p{margin:3px 0}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:9px 8px;border:1px solid #cbd5e1;text-align:left;font-size:12px}td{padding:8px;border:1px solid #e2e8f0;font-size:12px}.c{text-align:center}.r{text-align:right}.totals{margin-top:14px;margin-left:auto;width:280px}.totals div{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}.totals .grand{font-weight:bold;border-top:2px solid #2563eb;padding-top:7px;margin-top:4px;font-size:16px;color:#2563eb}.foot{text-align:center;margin-top:50px;font-size:11px;color:#666;border-top:1px dashed #ccc;padding-top:12px}`;
+  const gstBlock = (+st.gstRate > 0) ? (() => {
+    const gst = TP.calcGST(sale.total, st.gstRate);
+    return `
+      <div><span>Taxable Value</span><span>₹${gst.base.toFixed(2)}</span></div>
+      <div><span>CGST (${(st.gstRate/2).toFixed(1)}%)</span><span>₹${gst.cgst.toFixed(2)}</span></div>
+      <div><span>SGST (${(st.gstRate/2).toFixed(1)}%)</span><span>₹${gst.sgst.toFixed(2)}</span></div>
+    `;
+  })() : '';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${TP.esc(sale.invoiceNo)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>${css}</style></head><body>
+    <div class="head"><h1>${TP.esc(st.shopName || A.profile.shop.shopName)}</h1>
+      ${st.shopAddress ? `<p>${TP.esc(st.shopAddress)}</p>` : ''}
+      ${st.shopPhone ? `<p>Mobile: ${TP.esc(st.shopPhone)}</p>` : ''}
+      ${st.gstin ? `<p style="font-size:10px;font-family:monospace">GSTIN: ${TP.esc(st.gstin)}</p>` : ''}</div>
+    <div class="meta"><div>
+      <p><b>Invoice:</b> ${TP.esc(sale.invoiceNo)}</p>
+      <p><b>Date:</b> ${TP.fmtDate(sale.saleDate)}</p>
+      <p><b>Customer:</b> ${TP.esc(sale.customerName)}</p>
+      <p><b>Salesman:</b> ${TP.esc(sale.salesmanName)}</p></div></div>
+    <table><thead><tr><th class="c" style="width:30px">#</th><th>Item</th><th class="r" style="width:70px">Qty</th><th class="r" style="width:70px">Price</th><th class="r" style="width:85px">Total</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="totals">
+      <div><span>Subtotal</span><span>${TP.money(sale.subtotal)}</span></div>
+      <div><span>Discount</span><span>- ${TP.money(sale.discount)}</span></div>
+      ${gstBlock}
+      <div class="grand"><span>Total</span><span>${TP.money(sale.total)}</span></div>
+      <div><span>Paid</span><span>${TP.money(sale.paid)}</span></div>
+      <div><span>Due</span><span>${TP.money(sale.due)}</span></div>
+    </div>
+    <div class="foot"><p>Payment: ${TP.esc(payLabel(sale.paymentMethod))}</p><p>Thank you! 🙏</p></div>
+  </body></html>`;
+}
+
+function printInvoice(sale, format) {
+  const frame = document.getElementById('printFrame');
+  const doc = frame.contentDocument || frame.contentWindow.document;
+  doc.open(); doc.write(invoiceDoc(sale, format)); doc.close();
+  setTimeout(() => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch { TP.toast('Print failed', 'error'); } }, 400);
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard() {
+  const el = document.getElementById('page-dashboard');
+  const todaySales = A.sales.filter(s => TP.isToday(s.saleDate));
+  const sum = (arr, k) => arr.reduce((a, x) => a + (+x[k] || 0), 0);
+  const todayTotal = sum(todaySales, 'total');
+  const todayPaid = sum(todaySales, 'paid');
+  const todayDue = sum(todaySales, 'due');
+  const totalSales = sum(A.sales, 'total');
+  const totalDue = A.customers.reduce((a, c) => a + (+c.due || 0), 0);
+  const salesmenCount = A.users.filter(u => u.role === 'salesman').length;
+  const lowStock = A.products.filter(p => (+p.stockQty || 0) <= (+p.lowStockAlert || 0)).slice(0, 6);
+  const recent = A.sales.slice(0, 8);
+  const stat = (label, val, color, sub) => `
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <div class="text-[11px] text-gray-500 font-medium">${label}</div>
+      <div class="text-xl font-extrabold ${color||'text-gray-800'} mt-1">${val}</div>
+      ${sub ? `<div class="text-[10px] text-gray-400 mt-0.5">${sub}</div>` : ''}
+    </div>`;
+  el.innerHTML = `
+    <div class="p-3 space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div class="text-[11px] text-gray-500">🏪 Shop</div>
+        <div class="font-bold text-lg mt-0.5">${TP.esc(A.profile.shop.shopName)}</div>
+        <div class="flex items-center gap-2 mt-1.5">
+          <span class="font-mono text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">${TP.esc(A.shopId)}</span>
+          <button id="copyShopId" class="text-[10px] text-gray-500 underline">Copy</button>
+        </div>
+      </div>
+      <div><h3 class="text-sm font-bold text-gray-500 mb-2">📅 Today</h3>
+        <div class="grid grid-cols-2 gap-3">
+          ${stat('Today Sales', TP.money(todayTotal), 'text-blue-600', `${todaySales.length} transactions`)}
+          ${stat('Received', TP.money(todayPaid), 'text-green-600')}
+          ${stat('Due', TP.money(todayDue), 'text-red-600')}
+          ${stat('Salesmen', salesmenCount, '', 'active')}
+        </div>
+      </div>
+      <div><h3 class="text-sm font-bold text-gray-500 mb-2">📊 All Time</h3>
+        <div class="grid grid-cols-2 gap-3">
+          ${stat('Total Sales', TP.money(totalSales), 'text-blue-600', `${A.sales.length} transactions`)}
+          ${stat('Total Due', TP.money(totalDue), 'text-red-600')}
+          ${stat('Products', A.products.length, '', 'items')}
+          ${stat('Customers', A.customers.length, '', 'people')}
+        </div>
+      </div>
+      ${lowStock.length ? `<div class="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-orange-700 mb-2">⚠️ Low Stock (${lowStock.length})</h3>
+        ${lowStock.map(p => `<div class="flex justify-between text-sm py-0.5">
+          <span class="text-gray-700">${TP.esc(p.name)}</span>
+          <span class="font-bold ${(+p.stockQty||0)<=0?'text-red-600':'text-orange-600'}">${p.stockQty} ${TP.esc(p.unit||'')}</span>
+        </div>`).join('')}</div>` : ''}
+      <div><h3 class="text-sm font-bold text-gray-500 mb-2">🧾 Recent Sales</h3>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          ${recent.length ? recent.map(s => `<button data-sale="${s.id}" class="w-full text-left p-3 border-b last:border-0 flex items-center justify-between gap-2 hover:bg-gray-50">
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold text-sm truncate">${TP.esc(s.customerName)}</div>
+              <div class="text-[11px] text-gray-500 font-mono">${TP.esc(s.invoiceNo)} · ${TP.fmtDate(s.saleDate)}</div>
+              <div class="text-[10px] text-gray-400">${TP.esc(s.salesmanName)}</div>
+            </div>
+            <div class="text-right">
+              <div class="font-bold text-blue-600">${TP.money(s.total)}</div>
+              ${(+s.due||0)>0 ? `<div class="text-[10px] text-red-600">Due ${TP.money(s.due)}</div>` : ''}
+            </div></button>`).join('') : `<div class="p-6 text-center text-gray-400 text-sm">No sales yet</div>`}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('copyShopId').addEventListener('click', async () => { await TP.copyText(A.shopId); TP.toast('Copied', 'success'); });
+  el.querySelectorAll('[data-sale]').forEach(b => b.addEventListener('click', () => {
+    const sale = A.sales.find(x => x.id === b.dataset.sale); if (sale) showInvoice(sale);
+  }));
+}
+
+/* ============================================================
+   SALES LIST
+   ============================================================ */
+function renderSales() {
+  const el = document.getElementById('page-sales');
+  let list = A.sales.slice();
+  if (A.salesFilter.salesmanId) list = list.filter(s => s.salesmanId === A.salesFilter.salesmanId);
+  if (A.salesFilter.q) {
+    const q = A.salesFilter.q.toLowerCase();
+    list = list.filter(s => (s.invoiceNo||'').toLowerCase().includes(q) || (s.customerName||'').toLowerCase().includes(q) || (s.customerPhone||'').includes(q));
+  }
+  const total = list.reduce((a, s) => a + (+s.total || 0), 0);
+  const paid = list.reduce((a, s) => a + (+s.paid || 0), 0);
+  const due = list.reduce((a, s) => a + (+s.due || 0), 0);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="grid grid-cols-3 gap-2">
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">Total</div>
+          <div class="font-bold text-blue-600 text-sm mt-0.5">${TP.money(total)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">Received</div>
+          <div class="font-bold text-green-600 text-sm mt-0.5">${TP.money(paid)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">Due</div>
+          <div class="font-bold text-red-600 text-sm mt-0.5">${TP.money(due)}</div>
+        </div>
+      </div>
+      <select id="salesFilterSm" class="w-full px-3 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
+        <option value="">All salesmen</option>
+        ${A.users.filter(u => u.role === 'salesman').map(u => `<option value="${u.id}" ${A.salesFilter.salesmanId === u.id ? 'selected' : ''}>${TP.esc(u.name)}</option>`).join('')}
+      </select>
+      <input id="salesSearch" type="search" placeholder="🔍 Invoice / customer..." value="${TP.esc(A.salesFilter.q)}"
+        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
+      <div class="space-y-2">
+        ${list.length ? list.slice(0, 200).map(s => `
+          <button data-sale="${s.id}" class="w-full text-left bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-sm truncate">${TP.esc(s.customerName)}</div>
+                <div class="text-[11px] text-gray-500 font-mono mt-0.5">${TP.esc(s.invoiceNo)}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">${TP.fmtDate(s.saleDate)} · ${TP.esc(s.salesmanName)}</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-blue-600">${TP.money(s.total)}</div>
+                ${(+s.due||0)>0 ? `<div class="text-[10px] text-red-600">Due ${TP.money(s.due)}</div>` : `<div class="text-[10px] text-green-600">Paid</div>`}
+              </div>
+            </div>
+          </button>`).join('') : `<div class="text-center text-gray-400 py-12 bg-white rounded-xl">No sales yet</div>`}
+      </div>
+    </div>`;
+  const f = document.getElementById('salesFilterSm');
+  if (f) f.addEventListener('change', e => { A.salesFilter.salesmanId = e.target.value; renderSales(); });
+  document.getElementById('salesSearch').addEventListener('input', e => {
+    A.salesFilter.q = e.target.value;
+    clearTimeout(window._st); window._st = setTimeout(renderSales, 250);
+  });
+  el.querySelectorAll('[data-sale]').forEach(b => b.addEventListener('click', () => {
+    const sale = A.sales.find(x => x.id === b.dataset.sale); if (sale) showInvoice(sale);
+  }));
+}
+
+/* ============================================================
+   PRODUCTS
+   ============================================================ */
+function renderProducts() {
+  const el = document.getElementById('page-products');
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <button id="addProd" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Product</button>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="labelPrintBtn" class="bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm shadow-lg">🏷️ Print Labels</button>
+        <label class="bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm shadow-lg text-center cursor-pointer">
+          📥 Import CSV
+          <input id="csvInput" type="file" accept=".csv,text/csv" class="hidden">
+        </label>
+      </div>
+      <input id="prodSearch" type="search" placeholder="🔍 Name / barcode..."
+        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
+      <div id="prodList" class="space-y-2"></div>
+    </div>`;
+
+  const renderList = (q = '') => {
+    const list = A.products.filter(p => !q || (p.name||'').toLowerCase().includes(q.toLowerCase()) || (p.barcode||'').includes(q));
+    document.getElementById('prodList').innerHTML = list.length ? list.map(p => {
+      const stock = +p.stockQty || 0;
+      const low = stock <= (+p.lowStockAlert || 0);
+      return `
+        <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
+          <div class="font-semibold text-sm">${TP.esc(p.name)}</div>
+          ${p.category ? `<div class="text-[10px] text-gray-400 mt-0.5">📁 ${TP.esc(p.category)}</div>` : ''}
+          ${p.barcode ? `<div class="text-[10px] text-gray-500 font-mono mt-0.5">🏷️ #${TP.esc(p.barcode)}</div>` : ''}
+          <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500 mt-1.5">
+            <span>🏪 <b class="text-gray-700">${TP.money(p.retailPrice)}</b></span>
+            <span>🏭 <b class="text-gray-700">${TP.money(p.wholesalePrice)}</b></span>
+          </div>
+          <div class="mt-1.5">
+            <span class="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold
+              ${stock<=0?'bg-red-100 text-red-600':low?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}">
+              Stock: ${stock} ${TP.esc(p.unit||'')}
+            </span>
+          </div>
+          <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+            <button data-pqr="${p.id}" class="flex-1 min-w-[60px] bg-purple-50 text-purple-700 py-2 rounded-lg text-xs font-semibold">📱 QR</button>
+            <button data-pstock="${p.id}" class="flex-1 min-w-[60px] bg-green-50 text-green-700 py-2 rounded-lg text-xs font-semibold">📦 Stock</button>
+            <button data-pedit="${p.id}" class="flex-1 min-w-[60px] bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-semibold">✏️ Edit</button>
+            <button data-pdel="${p.id}" class="px-3 bg-red-50 text-red-600 py-2 rounded-lg text-xs font-semibold">🗑</button>
+          </div>
+        </div>`;
+    }).join('') : `<div class="bg-white rounded-xl p-8 text-center text-gray-400">No products yet</div>`;
+
+    document.querySelectorAll('[data-pedit]').forEach(b => b.addEventListener('click', () => openProductForm(b.dataset.pedit)));
+    document.querySelectorAll('[data-pdel]').forEach(b => b.addEventListener('click', async () => {
+      const p = A.products.find(x => x.id === b.dataset.pdel);
+      if (!p) return;
+      if (await TP.askConfirm(`Delete "${p.name}"?`)) {
+        await TP.db.collection('shops').doc(A.shopId).collection('products').doc(p.id).delete();
+        TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'PRODUCT_DELETE', p.name);
+        TP.toast('Deleted', 'success');
+      }
+    }));
+    document.querySelectorAll('[data-pstock]').forEach(b => b.addEventListener('click', () => {
+      const p = A.products.find(x => x.id === b.dataset.pstock);
+      if (!p) return;
+      openForm(`Add Stock — ${p.name}`,
+        [
+          { name: 'qty', label: `Quantity (current: ${p.stockQty} ${p.unit||''})`, type: 'number', required: true, min: 0, step: '0.01', default: 10 },
+          { name: 'note', label: 'Note (optional)' },
+        ], {}, async d => {
+          const qty = +d.qty;
+          if (!qty || qty <= 0) throw new Error('Enter a valid quantity');
+          await TP.db.collection('shops').doc(A.shopId).collection('products').doc(p.id).update({ stockQty: (+p.stockQty||0) + qty });
+          TP.toast(`${qty} ${p.unit||''} added`, 'success');
+        });
+    }));
+    document.querySelectorAll('[data-pqr]').forEach(b => b.addEventListener('click', () => {
+      const p = A.products.find(x => x.id === b.dataset.pqr);
+      if (!p) return;
+      if (!p.barcode) { TP.toast('No barcode on this product', 'warn'); return; }
+      showProductQRModal(p.name, p.barcode);
+    }));
+  };
+
+  renderList();
+  document.getElementById('prodSearch').addEventListener('input', e => renderList(e.target.value));
+  document.getElementById('addProd').addEventListener('click', () => openProductForm(null));
+  document.getElementById('labelPrintBtn').addEventListener('click', () => {
+    if (!A.products.length) { TP.toast('No products', 'warn'); return; }
+    TP.printLabelSheet(A.products, A.profile.shop.settings || {});
+  });
+  document.getElementById('csvInput').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const rows = TP.parseCSV(text);
+      if (!rows.length) { TP.toast('CSV empty', 'error'); return; }
+      if (!rows[0].name) { TP.toast('CSV needs "name" column', 'error'); return; }
+      if (!await TP.askConfirm(`Import ${rows.length} products?`)) return;
+      const shopRef = TP.db.collection('shops').doc(A.shopId);
+      const batch = TP.db.batch();
+      let count = 0;
+      for (const r of rows) {
+        if (!r.name) continue;
+        const ref = shopRef.collection('products').doc();
+        batch.set(ref, {
+          name: r.name, category: r.category || '',
+          barcode: r.barcode || TP.generateBarcode(),
+          unit: r.unit || 'pcs',
+          retailPrice: +r.retailPrice || 0,
+          wholesalePrice: +r.wholesalePrice || 0,
+          stockQty: +r.stockQty || 0,
+          lowStockAlert: +r.lowStockAlert || 5,
+          imageUrl: r.imageUrl || '',
+          variantGroup: r.variantGroup || '',
+          createdAt: TP.FV.serverTimestamp(),
+        });
+        count++;
+      }
+      await batch.commit();
+      TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'CSV_IMPORT', `${count} products imported`);
+      TP.toast(`${count} products imported`, 'success');
+    } catch (err) {
+      console.error(err);
+      TP.toast('CSV import failed', 'error');
+    }
+    e.target.value = '';
+  });
+}
+
+function openProductForm(id) {
+  const p = id ? A.products.find(x => x.id === id) : null;
+  const autoBarcode = p ? (p.barcode || '') : TP.generateBarcode();
+  openForm(p ? 'Edit Product' : 'New Product',
+    [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'category', label: 'Category', placeholder: 'e.g. Shirt, Saree' },
+      { name: 'barcode', label: '🏷️ Barcode / QR (auto)', default: autoBarcode },
+      { name: 'unit', label: 'Unit', default: 'pcs' },
+      { name: 'retailPrice', label: 'Retail Price (₹)', type: 'number', step: '0.01', required: true, min: 0 },
+      { name: 'wholesalePrice', label: 'Wholesale Price (₹)', type: 'number', step: '0.01', required: true, min: 0 },
+      { name: 'stockQty', label: 'Stock', type: 'number', step: '0.01', required: true, min: 0 },
+      { name: 'lowStockAlert', label: 'Low stock alert', type: 'number', step: '1', default: 5, min: 0 },
+      { name: 'imageUrl', label: '🖼️ Image URL (optional)', placeholder: 'https://...' },
+      { name: 'variantGroup', label: 'Variant group (optional)', placeholder: 'e.g. T-Shirt' },
+    ], p ? { ...p } : { barcode: autoBarcode },
+    async d => {
+      const ref = TP.db.collection('shops').doc(A.shopId).collection('products');
+      const barcode = (d.barcode || '').trim() || autoBarcode;
+      if (!p) {
+        const dup = A.products.find(x => x.barcode === barcode);
+        if (dup) throw new Error('Barcode already used: ' + barcode);
+      }
+      const body = {
+        name: d.name.trim(), category: (d.category||'').trim(), barcode,
+        unit: (d.unit||'').trim(), retailPrice: +d.retailPrice || 0,
+        wholesalePrice: +d.wholesalePrice || 0, stockQty: +d.stockQty || 0,
+        lowStockAlert: +d.lowStockAlert || 0,
+        imageUrl: (d.imageUrl || '').trim(),
+        variantGroup: (d.variantGroup || '').trim(),
+      };
+      if (p) {
+        await ref.doc(p.id).update(body);
+        TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'PRODUCT_EDIT', body.name);
+      } else {
+        await ref.add({ ...body, createdAt: TP.FV.serverTimestamp() });
+        TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'PRODUCT_ADD', body.name);
+      }
+      TP.toast('Saved · Barcode: ' + barcode, 'success');
+      setTimeout(() => showProductQRModal(d.name.trim(), barcode), 300);
+    });
+}
+
+function showProductQRModal(name, barcode) {
+  const old = document.getElementById('_prodQRModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_prodQRModal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif`;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:22px;max-width:420px;width:100%;padding:24px;text-align:center">
+      <div style="font-size:36px;margin-bottom:6px">🏷️</div>
+      <h3 style="font-weight:800;font-size:17px;margin:0 0 4px">${TP.esc(name)}</h3>
+      <p style="color:#6b7280;font-size:12px;margin:0 0 16px">Save barcode / QR</p>
+      <div id="_prodQRImg" style="margin-bottom:14px">
+        <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block;border:1px solid #e5e7eb">Generating QR...</div>
+      </div>
+      <div style="background:#f9fafb;padding:10px;border-radius:10px;font-family:monospace;font-size:13px;font-weight:700;color:#374151;letter-spacing:1px;margin-bottom:14px">${TP.esc(barcode)}</div>
+      <button id="_prodQRDown" style="width:100%;background:#7c3aed;color:#fff;padding:12px;border:none;border-radius:12px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;margin-bottom:8px">📥 Download QR</button>
+      <button id="_prodQRClose" style="width:100%;background:#f3f4f6;color:#374151;padding:12px;border:none;border-radius:12px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer">Close</button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  TP.generateQRDataURL(barcode, 500).then(url => {
+    document.getElementById('_prodQRImg').innerHTML = `
+      <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block;border:1px solid #e5e7eb">
+        <img src="${url}" style="width:230px;height:230px;display:block">
+      </div>`;
+    document.getElementById('_prodQRDown').onclick = () => TP.downloadDataURL(url, `QR-${barcode}.png`);
+  }).catch(() => {
+    document.getElementById('_prodQRImg').innerHTML = `<div style="color:#dc2626;padding:20px">QR failed</div>`;
+  });
+
+  document.getElementById('_prodQRClose').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+/* ============================================================
+   INVENTORY
+   ============================================================ */
+function renderInventory() {
+  const el = document.getElementById('page-inventory');
+  const lowStock = A.products.filter(p => (+p.stockQty||0) <= (+p.lowStockAlert||0));
+  const outStock = A.products.filter(p => (+p.stockQty||0) <= 0);
+  const totalValue = A.products.reduce((a, p) => a + (+p.stockQty||0) * (+p.wholesalePrice||0), 0);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-2xl p-4">
+        <div class="text-xs text-gray-600 font-medium">Total Stock Value</div>
+        <div class="text-2xl font-extrabold text-green-700 mt-1">${TP.money(totalValue)}</div>
+        <div class="text-[11px] text-gray-500 mt-1">${A.products.length} products</div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-red-50 border border-red-200 rounded-2xl p-4">
+          <div class="text-[11px] text-red-700 font-bold">Out of Stock</div>
+          <div class="text-2xl font-extrabold text-red-600 mt-1">${outStock.length}</div>
+        </div>
+        <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+          <div class="text-[11px] text-orange-700 font-bold">Low Stock</div>
+          <div class="text-2xl font-extrabold text-orange-600 mt-1">${lowStock.length}</div>
+        </div>
+      </div>
+      <h3 class="text-sm font-bold text-gray-500 mt-2">📦 Stock List</h3>
+      <div class="space-y-2">
+        ${A.products.slice().sort((a,b) => (+a.stockQty||0) - (+b.stockQty||0)).map(p => {
+          const stock = +p.stockQty||0;
+          const low = stock <= (+p.lowStockAlert||0);
+          return `<div class="bg-white rounded-xl p-3 flex justify-between items-center shadow-sm border border-gray-100">
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold text-sm truncate">${TP.esc(p.name)}</div>
+              <div class="text-[10px] text-gray-400 font-mono">${p.barcode ? '#'+TP.esc(p.barcode) : ''}</div>
+            </div>
+            <div class="font-bold ${stock<=0?'text-red-600':low?'text-orange-600':'text-green-700'}">${stock} ${TP.esc(p.unit||'')}</div>
+          </div>`;
+        }).join('') || `<div class="bg-white rounded-xl p-8 text-center text-gray-400">No products</div>`}
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   CUSTOMERS
+   ============================================================ */
+function renderCustomers() {
+  const el = document.getElementById('page-customers');
+  const totalDue = A.customers.reduce((a, c) => a + (+c.due||0), 0);
+  const sorted = A.customers.slice().sort((a, b) => (+b.due||0) - (+a.due||0));
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 rounded-2xl p-4">
+        <div class="text-xs text-gray-600 font-medium">Total Due</div>
+        <div class="text-2xl font-extrabold text-red-600 mt-0.5">${TP.money(totalDue)}</div>
+        <div class="text-[11px] text-gray-500 mt-1">${A.customers.filter(c => (+c.due||0) > 0).length} customers</div>
+      </div>
+      <button id="addCust" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Customer</button>
+      <input id="custSearch" type="search" placeholder="🔍 Name / mobile..."
+        class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
+      <div id="custList" class="space-y-2"></div>
+    </div>`;
+  const renderList = (q = '') => {
+    const list = sorted.filter(c => !q || (c.name||'').toLowerCase().includes(q.toLowerCase()) || (c.phone||'').includes(q));
+    document.getElementById('custList').innerHTML = list.length ? list.map(c => `
+      <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-start gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold text-sm truncate">${TP.esc(c.name)}</div>
+            ${c.phone ? `<div class="text-xs text-gray-500 mt-0.5">📞 ${TP.esc(c.phone)}</div>` : ''}
+            ${c.address ? `<div class="text-[11px] text-gray-400 mt-0.5 truncate">📍 ${TP.esc(c.address)}</div>` : ''}
+            ${(+c.loyaltyPoints || 0) > 0 ? `<div class="text-[10px] text-purple-600 font-semibold mt-0.5">⭐ ${c.loyaltyPoints} pts</div>` : ''}
+          </div>
+          <div class="text-right">
+            ${(+c.due||0) > 0 ? `<div class="font-bold text-red-600 text-sm">Due ${TP.money(c.due)}</div>` : `<div class="text-xs text-green-600 font-medium">Clear</div>`}
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+          <button data-cpay="${c.id}" class="flex-1 min-w-[70px] bg-green-50 text-green-700 py-2 rounded-lg text-xs font-semibold">💵 Payment</button>
+          ${(+c.due || 0) > 0 && c.phone ? `<button data-cremind="${c.id}" class="flex-1 min-w-[70px] bg-green-100 text-green-800 py-2 rounded-lg text-xs font-semibold">💬 Remind</button>` : ''}
+          <button data-cedit="${c.id}" class="flex-1 min-w-[70px] bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-semibold">✏️ Edit</button>
+          <button data-cdel="${c.id}" class="px-3 bg-red-50 text-red-600 py-2 rounded-lg text-xs font-semibold">🗑</button>
+        </div>
+      </div>`).join('') : `<div class="bg-white rounded-xl p-8 text-center text-gray-400">No customers yet</div>`;
+    document.querySelectorAll('[data-cpay]').forEach(b => b.addEventListener('click', () => openPaymentModal(b.dataset.cpay)));
+    document.querySelectorAll('[data-cedit]').forEach(b => b.addEventListener('click', () => openCustomerForm(b.dataset.cedit)));
+    document.querySelectorAll('[data-cremind]').forEach(b => b.addEventListener('click', () => {
+      const c = A.customers.find(x => x.id === b.dataset.cremind);
+      if (!c || !c.phone) return;
+      TP.openWhatsApp(c.phone, TP.buildDueReminderMessage(c, A.profile.shop.settings || {}));
+    }));
+    document.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => {
+      const c = A.customers.find(x => x.id === b.dataset.cdel);
+      if (!c) return;
+      if (+c.due > 0) { TP.toast('Cannot delete customer with pending due', 'error'); return; }
+      if (await TP.askConfirm(`Delete "${c.name}"?`)) {
+        await TP.db.collection('shops').doc(A.shopId).collection('customers').doc(c.id).delete();
+        TP.toast('Deleted', 'success');
+      }
+    }));
+  };
+  renderList();
+  document.getElementById('custSearch').addEventListener('input', e => renderList(e.target.value));
+  document.getElementById('addCust').addEventListener('click', () => openCustomerForm(null));
+}
+
+function openCustomerForm(id) {
+  const c = id ? A.customers.find(x => x.id === id) : null;
+  openForm(c ? 'Edit Customer' : 'Add Customer',
+    [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'phone', label: 'Mobile', type: 'tel' },
+      { name: 'address', label: 'Address', type: 'textarea' },
+    ], c ? { name: c.name, phone: c.phone, address: c.address } : {},
+    async d => {
+      const ref = TP.db.collection('shops').doc(A.shopId).collection('customers');
+      const body = { name: d.name.trim(), phone: d.phone.trim(), address: (d.address||'').trim(), due: c ? (+c.due||0) : 0 };
+      if (c) await ref.doc(c.id).update(body);
+      else { body.loyaltyPoints = 0; await ref.add({ ...body, createdAt: TP.FV.serverTimestamp() }); }
+      TP.toast('Saved', 'success');
+    });
+}
+
+function openPaymentModal(custId) {
+  const c = A.customers.find(x => x.id === custId);
+  if (!c) return;
+  openForm(`Receive Payment — ${c.name}`,
+    [
+      { name: 'amount', label: `Amount (due: ${TP.money(c.due)})`, type: 'number', required: true, min: 1, default: c.due },
+      { name: 'method', label: 'Method', type: 'select', options: [
+        { value: 'cash', label: '💵 Cash' }, { value: 'bkash', label: '📱 bKash' },
+        { value: 'upi', label: '💳 UPI' },
+        { value: 'card', label: '💳 Card' }, { value: 'bank', label: '🏦 Bank' }]},
+      { name: 'note', label: 'Note (optional)' },
+    ], {}, async d => {
+      const amt = +d.amount;
+      if (!amt || amt <= 0) throw new Error('Enter valid amount');
+      if (amt > (+c.due||0)) throw new Error('Exceeds due amount');
+      const shopRef = TP.db.collection('shops').doc(A.shopId);
+      const batch = TP.db.batch();
+      batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) - amt });
+      batch.set(shopRef.collection('payments').doc(), {
+        customerId: c.id, customerName: c.name, amount: amt, method: d.method,
+        note: d.note || '', salesmanName: A.profile.name, paymentDate: TP.FV.serverTimestamp(),
+      });
+      await batch.commit();
+      TP.toast(`${TP.money(amt)} received`, 'success');
+    });
+}
+
+/* ============================================================
+   SALESMEN
+   ============================================================ */
+function renderSalesmen() {
+  const el = document.getElementById('page-salesmen');
+  const salesmen = A.users.filter(u => u.role === 'salesman');
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+        💡 Give each salesman the <b>Shop ID</b>, <b>username</b>, and <b>temporary password</b>.
+      </div>
+      <button id="addSalesman" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Salesman</button>
+      <div class="space-y-2">
+        ${salesmen.length ? salesmen.map(u => {
+          const sales = A.sales.filter(s => s.salesmanId === u.id);
+          const todaySales = sales.filter(s => TP.isToday(s.saleDate));
+          const todayTotal = todaySales.reduce((a, s) => a + (+s.total||0), 0);
+          const totalSum = sales.reduce((a, s) => a + (+s.total||0), 0);
+          const commTotal = sales.reduce((a, s) => a + (+s.commissionAmount||0), 0);
+          return `
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div class="font-bold truncate">${TP.esc(u.name)}</div>
+              <div class="text-[11px] text-gray-500 font-mono">${TP.esc(u.username)}</div>
+              <div class="text-[10px] text-gray-400 mt-0.5">Joined: ${TP.fmtDate(u.createdAt)}</div>
+              ${u.mustChangePassword ? `<div class="mt-1 inline-block bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded">⏳ Password not changed</div>` : ''}
+              <div class="grid grid-cols-2 gap-2 mt-3">
+                <div class="bg-blue-50 rounded-lg p-2.5">
+                  <div class="text-[10px] text-blue-600 font-medium">Today</div>
+                  <div class="font-bold text-blue-600 text-sm mt-0.5">${TP.money(todayTotal)}</div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-2.5">
+                  <div class="text-[10px] text-gray-600 font-medium">Total (${sales.length})</div>
+                  <div class="font-bold text-sm mt-0.5">${TP.money(totalSum)}</div>
+                </div>
+              </div>
+              ${u.commissionRate ? `<div class="mt-2 text-[10px] text-purple-600 bg-purple-50 px-2 py-1 rounded font-semibold">💰 Commission: ${u.commissionRate}% · Earned: ${TP.money(commTotal)}</div>` : ''}
+              <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                <button data-del-sm="${u.id}" class="flex-1 bg-red-50 text-red-600 py-2 rounded-lg text-xs font-semibold">🗑 Delete</button>
+              </div>
+            </div>`;
+        }).join('') : `<div class="bg-white rounded-xl p-8 text-center text-gray-400">No salesmen yet</div>`}
+      </div>
+    </div>`;
+  document.getElementById('addSalesman').addEventListener('click', () => {
+    const tmpPw = 'sm' + Math.random().toString(36).slice(2, 8);
+    openForm('Add Salesman',
+      [
+        { name: 'name', label: 'Full name', required: true },
+        { name: 'username', label: 'Username (English)', required: true, placeholder: 'e.g. karim' },
+        { name: 'password', label: 'Temporary password', required: true, default: tmpPw },
+        { name: 'commissionRate', label: 'Commission % (optional)', type: 'number', min: 0, max: 100, step: '0.1', default: 0 },
+      ], {}, async d => {
+        const uname = d.username.trim().toLowerCase().replace(/\s+/g, '');
+        if (uname.length < 3) throw new Error('Username min 3 chars');
+        if ((d.password||'').length < 6) throw new Error('Password min 6 chars');
+        if (A.users.find(u => u.username === uname)) throw new Error('Username taken');
+        const email = TP.salesmanEmail(A.shopId, uname);
+        const secondaryApp = firebase.initializeApp(firebase.app().options, 'Secondary' + Date.now());
+        const secondaryAuth = secondaryApp.auth();
+        let newUid;
+        try {
+          const cred = await secondaryAuth.createUserWithEmailAndPassword(email, d.password);
+          newUid = cred.user.uid;
+          await secondaryAuth.signOut();
+        } finally { try { await secondaryApp.delete(); } catch {} }
+        await TP.db.collection('users').doc(newUid).set({
+          shopId: A.shopId, username: uname, name: d.name.trim(),
+          role: 'salesman', mustChangePassword: true,
+          commissionRate: +d.commissionRate || 0,
+          createdAt: TP.FV.serverTimestamp(),
+        });
+        TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'SALESMAN_ADD', d.name.trim());
+        TP.toast('Salesman created', 'success');
+        setTimeout(() => showCreds({ name: d.name.trim(), username: uname }, d.password), 300);
+      });
+  });
+  document.querySelectorAll('[data-del-sm]').forEach(b => b.addEventListener('click', async () => {
+    const u = A.users.find(x => x.id === b.dataset.delSm);
+    if (!u) return;
+    if (await TP.askConfirm(`Delete "${u.name}"?`)) {
+      try { await TP.db.collection('users').doc(u.id).delete(); TP.toast('Deleted', 'success'); }
+      catch (e) { TP.toast(e.message, 'error'); }
+    }
+  }));
+}
+
+function showCreds(user, password) {
+  document.getElementById('formModalTitle').textContent = 'Salesman Credentials';
+  document.getElementById('formModalBody').innerHTML = `
+    <div class="text-center mb-4"><div class="text-5xl mb-2">✅</div>
+      <h3 class="font-bold text-lg">Salesman Created</h3></div>
+    <div class="space-y-2 bg-blue-50 rounded-xl p-4 border-2 border-dashed border-blue-300">
+      <div class="flex justify-between"><span class="text-xs text-gray-600">Shop ID</span><span class="font-mono font-bold text-blue-600">${TP.esc(A.shopId)}</span></div>
+      <div class="flex justify-between"><span class="text-xs text-gray-600">Name</span><span class="font-semibold">${TP.esc(user.name)}</span></div>
+      <div class="flex justify-between"><span class="text-xs text-gray-600">Username</span><span class="font-mono font-bold">${TP.esc(user.username)}</span></div>
+      <div class="flex justify-between"><span class="text-xs text-gray-600">Password</span><span class="font-mono font-bold text-red-600">${TP.esc(password)}</span></div>
+    </div>
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800 mt-3">
+      ⚠️ Salesman must change password on first login.
+    </div>
+    <button id="copyCreds" class="w-full mt-4 bg-blue-600 text-white py-3 rounded-xl font-semibold">📋 Copy All</button>`;
+  document.getElementById('formModalFooter').style.display = 'none';
+  document.getElementById('formModalForm').onsubmit = e => e.preventDefault();
+  setTimeout(() => {
+    document.getElementById('copyCreds').addEventListener('click', async () => {
+      await TP.copyText(`Shop ID: ${A.shopId}\nName: ${user.name}\nUsername: ${user.username}\nPassword: ${password}`);
+      TP.toast('Copied', 'success');
+    });
+    const obs = new MutationObserver(() => {
+      if (document.getElementById('formModal').classList.contains('hide')) {
+        document.getElementById('formModalFooter').style.display = 'flex';
+        document.getElementById('formModalForm').onsubmit = null;
+        obs.disconnect();
+      }
+    });
+    obs.observe(document.getElementById('formModal'), { attributes: true, attributeFilter: ['class'] });
+  }, 50);
+  openModal('formModal');
+}
+
+/* ============================================================
+   PURCHASES
+   ============================================================ */
+function renderPurchases() {
+  const el = document.getElementById('page-purchases');
+  const monthKey = TP.todayKey().slice(0, 6);
+  const monthTotal = A.purchases.filter(x => {
+    const d = x.purchaseDate?.toDate ? x.purchaseDate.toDate() : new Date(x.purchaseDate);
+    return TP.todayKey(d).slice(0, 6) === monthKey;
+  }).reduce((a, x) => a + (+x.total || 0), 0);
+  const todayTotal = A.purchases.filter(x => TP.isToday(x.purchaseDate)).reduce((a, x) => a + (+x.total || 0), 0);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Today</div>
+          <div class="text-xl font-extrabold text-purple-600 mt-1">${TP.money(todayTotal)}</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">This Month</div>
+          <div class="text-xl font-extrabold text-purple-600 mt-1">${TP.money(monthTotal)}</div>
+        </div>
+      </div>
+      <button id="addPurchaseBtn" class="w-full bg-purple-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Purchase</button>
+      <div class="space-y-2">
+        ${A.purchases.length ? A.purchases.slice(0, 100).map(x => `
+          <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-sm">${TP.esc(x.supplier || 'Unknown supplier')}</div>
+                ${x.note ? `<div class="text-[11px] text-gray-500 mt-0.5">${TP.esc(x.note)}</div>` : ''}
+                <div class="text-[10px] text-gray-400 mt-0.5">${TP.fmtDate(x.purchaseDate)} · ${x.items?.length || 0} items</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-purple-600">${TP.money(x.total)}</div>
+                <button data-pur-del="${x.id}" class="text-[10px] text-gray-400 underline mt-1">Delete</button>
+              </div>
+            </div>
+          </div>`).join('') : '<div class="bg-white rounded-xl p-8 text-center text-gray-400">No purchases yet</div>'}
+      </div>
+    </div>`;
+  document.getElementById('addPurchaseBtn').addEventListener('click', openPurchaseForm);
+  el.querySelectorAll('[data-pur-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!await TP.askConfirm('Delete this purchase? Stock will NOT be reversed.')) return;
+    await TP.db.collection('shops').doc(A.shopId).collection('purchases').doc(b.dataset.purDel).delete();
+    TP.toast('Deleted', 'success');
+  }));
+}
+
+function openPurchaseForm() {
+  const old = document.getElementById('_purModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_purModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:12px;font-family:Inter,sans-serif;overflow-y:auto';
+  const tempCart = [];
+
+  const renderModal = () => {
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:20px;max-width:500px;width:100%;padding:20px;max-height:94vh;overflow-y:auto;margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="font-weight:800;font-size:17px;margin:0">📥 New Purchase</h3>
+          <button id="_purClose" style="background:#f3f4f6;border:none;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">×</button>
+        </div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px">Supplier name</label>
+        <input id="_purSupplier" placeholder="e.g. ABC Textiles" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit;margin-bottom:10px;box-sizing:border-box">
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px">Add items</label>
+        <div style="background:#f9fafb;border-radius:12px;padding:10px;margin-bottom:10px">
+          <select id="_purProd" style="width:100%;padding:8px;border:2px solid #e5e7eb;border-radius:8px;font-family:inherit;margin-bottom:6px;box-sizing:border-box">
+            <option value="">-- Select product --</option>
+            ${A.products.map(p => `<option value="${p.id}">${TP.esc(p.name)} (${p.stockQty} ${p.unit||''})</option>`).join('')}
+          </select>
+          <div style="display:flex;gap:6px">
+            <input id="_purQty" type="number" min="1" step="0.01" placeholder="Qty" style="flex:1;padding:8px;border:2px solid #e5e7eb;border-radius:8px;font-family:inherit">
+            <input id="_purPrice" type="number" min="0" step="0.01" placeholder="Unit ₹" style="flex:1;padding:8px;border:2px solid #e5e7eb;border-radius:8px;font-family:inherit">
+            <button id="_purAddItem" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:0 14px;font-weight:700;font-size:13px;cursor:pointer">Add</button>
+          </div>
+        </div>
+        <div id="_purItems" style="margin-bottom:10px">
+          ${tempCart.length ? tempCart.map((it, i) => `
+            <div style="display:flex;justify-content:space-between;padding:8px;background:#f9fafb;border-radius:8px;margin-bottom:4px;font-size:13px">
+              <div>${TP.esc(it.name)} — ${it.qty} × ₹${it.price}</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <b>₹${(it.qty*it.price).toFixed(2)}</b>
+                <button data-pur-rm="${i}" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:2px 6px;font-size:11px;cursor:pointer">✕</button>
+              </div>
+            </div>`).join('') : '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:10px">No items</div>'}
+        </div>
+        <div style="background:#f5f3ff;border-radius:10px;padding:10px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-weight:700"><span>Total</span><span>₹${tempCart.reduce((a,it)=>a+it.qty*it.price,0).toFixed(2)}</span></div>
+        </div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px">Note (optional)</label>
+        <input id="_purNote" placeholder="Any note..." style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit;margin-bottom:12px;box-sizing:border-box">
+        <button id="_purSave" style="width:100%;background:#7c3aed;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:700;font-size:15px;cursor:pointer">Save Purchase</button>
+      </div>`;
+    document.getElementById('_purClose').onclick = () => modal.remove();
+    document.getElementById('_purAddItem').onclick = () => {
+      const pid = document.getElementById('_purProd').value;
+      const qty = +document.getElementById('_purQty').value;
+      const price = +document.getElementById('_purPrice').value;
+      if (!pid || !qty || !price) { TP.toast('Product + qty + price required', 'error'); return; }
+      const p = A.products.find(x => x.id === pid);
+      tempCart.push({ productId: pid, name: p.name, unit: p.unit || '', qty, price });
+      renderModal();
+    };
+    modal.querySelectorAll('[data-pur-rm]').forEach(b => b.addEventListener('click', () => {
+      tempCart.splice(+b.dataset.purRm, 1);
+      renderModal();
+    }));
+    document.getElementById('_purSave').onclick = async () => {
+      const supplier = document.getElementById('_purSupplier').value.trim();
+      const note = document.getElementById('_purNote').value.trim();
+      if (!tempCart.length) { TP.toast('Add at least one item', 'error'); return; }
+      const total = tempCart.reduce((a, it) => a + it.qty * it.price, 0);
+      const batch = TP.db.batch();
+      const shopRef = TP.db.collection('shops').doc(A.shopId);
+      const purRef = shopRef.collection('purchases').doc();
+      batch.set(purRef, {
+        supplier, note, items: tempCart.map(it => ({ ...it })),
+        total, salesmanName: A.profile.name,
+        purchaseDate: TP.FV.serverTimestamp(),
+      });
+      for (const it of tempCart) {
+        const p = A.products.find(x => x.id === it.productId);
+        if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty || 0) + it.qty });
+      }
+      await batch.commit();
+      modal.remove();
+      TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'PURCHASE', `₹${total} from ${supplier}`);
+      TP.toast('Purchase saved · Stock updated', 'success');
+    };
+    modal.addEventListener('click', e => { if (e.target === modal && e.target.id === '_purModal') modal.remove(); });
+  };
+  document.body.appendChild(modal);
+  renderModal();
+}
+
+/* ============================================================
+   EXPENSES
+   ============================================================ */
+function renderExpenses() {
+  const el = document.getElementById('page-expenses');
+  const monthKey = TP.todayKey().slice(0, 6);
+  const monthTotal = A.expenses.filter(x => {
+    const d = x.expenseDate?.toDate ? x.expenseDate.toDate() : new Date(x.expenseDate);
+    return TP.todayKey(d).slice(0, 6) === monthKey;
+  }).reduce((a, x) => a + (+x.amount || 0), 0);
+  const todayTotal = A.expenses.filter(x => TP.isToday(x.expenseDate)).reduce((a, x) => a + (+x.amount || 0), 0);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Today</div>
+          <div class="text-xl font-extrabold text-red-600 mt-1">${TP.money(todayTotal)}</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">This Month</div>
+          <div class="text-xl font-extrabold text-red-600 mt-1">${TP.money(monthTotal)}</div>
+        </div>
+      </div>
+      <button id="addExpenseBtn" class="w-full bg-red-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Expense</button>
+      <div class="space-y-2">
+        ${A.expenses.length ? A.expenses.slice(0, 100).map(x => `
+          <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100 flex justify-between items-start gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold text-sm">${TP.esc(x.category || 'Other')}</div>
+              ${x.note ? `<div class="text-[11px] text-gray-500 mt-0.5">${TP.esc(x.note)}</div>` : ''}
+              <div class="text-[10px] text-gray-400 mt-0.5">${TP.fmtDate(x.expenseDate)}</div>
+            </div>
+            <div class="text-right">
+              <div class="font-bold text-red-600">${TP.money(x.amount)}</div>
+              <button data-exp-del="${x.id}" class="text-[10px] text-gray-400 underline mt-1">Delete</button>
+            </div>
+          </div>`).join('') : '<div class="bg-white rounded-xl p-8 text-center text-gray-400">No expenses yet</div>'}
+      </div>
+    </div>`;
+  document.getElementById('addExpenseBtn').addEventListener('click', () => {
+    openForm('Add Expense',
+      [
+        { name: 'category', label: 'Category', type: 'select', options: [
+          { value: 'Rent', label: '🏠 Rent' },
+          { value: 'Salary', label: '👥 Salary' },
+          { value: 'Electricity', label: '💡 Electricity' },
+          { value: 'Transport', label: '🚗 Transport' },
+          { value: 'Supplies', label: '📦 Supplies' },
+          { value: 'Other', label: '📌 Other' },
+        ]},
+        { name: 'amount', label: 'Amount (₹)', type: 'number', required: true, min: 1, step: '0.01' },
+        { name: 'note', label: 'Note (optional)' },
+      ], {}, async d => {
+        const amt = +d.amount;
+        if (!amt || amt <= 0) throw new Error('Enter valid amount');
+        await TP.db.collection('shops').doc(A.shopId).collection('expenses').add({
+          category: d.category, amount: amt,
+          note: (d.note || '').trim(),
+          salesmanName: A.profile.name,
+          expenseDate: TP.FV.serverTimestamp(),
+        });
+        TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'EXPENSE', `${d.category} ₹${amt}`);
+        TP.toast('Expense added', 'success');
+      });
+  });
+  el.querySelectorAll('[data-exp-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!await TP.askConfirm('Delete this expense?')) return;
+    await TP.db.collection('shops').doc(A.shopId).collection('expenses').doc(b.dataset.expDel).delete();
+    TP.toast('Deleted', 'success');
+  }));
+}
+
+/* ============================================================
+   RETURNS
+   ============================================================ */
+function renderReturns() {
+  const el = document.getElementById('page-returns');
+  const monthTotal = A.returns.filter(x => {
+    const d = x.returnDate?.toDate ? x.returnDate.toDate() : new Date(x.returnDate);
+    return TP.todayKey(d).slice(0, 6) === TP.todayKey().slice(0, 6);
+  }).reduce((a, x) => a + (+x.total || 0), 0);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div class="text-[11px] text-gray-500">This Month Returns</div>
+        <div class="text-xl font-extrabold text-orange-600 mt-1">${TP.money(monthTotal)}</div>
+      </div>
+      <button id="addReturnBtn" class="w-full bg-orange-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ New Return / Refund</button>
+      <div class="space-y-2">
+        ${A.returns.length ? A.returns.slice(0, 100).map(x => `
+          <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-sm">${TP.esc(x.customerName || 'Walk-in')}</div>
+                <div class="text-[11px] text-gray-500 font-mono mt-0.5">Invoice: ${TP.esc(x.invoiceNo || 'N/A')}</div>
+                <div class="text-[10px] text-gray-400 mt-0.5">${TP.fmtDate(x.returnDate)} · ${x.items?.length || 0} items</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-orange-600">${TP.money(x.total)}</div>
+                <div class="text-[10px] text-gray-400">${TP.esc(x.refundMethod || 'cash')}</div>
+              </div>
+            </div>
+          </div>`).join('') : '<div class="bg-white rounded-xl p-8 text-center text-gray-400">No returns yet</div>'}
+      </div>
+    </div>`;
+  document.getElementById('addReturnBtn').addEventListener('click', openReturnForm);
+}
+
+function openReturnForm() {
+  const recentSales = A.sales.slice(0, 30);
+  if (!recentSales.length) { TP.toast('No recent sales', 'warn'); return; }
+  const options = recentSales.map(s => ({
+    value: s.id,
+    label: `${s.invoiceNo} · ${s.customerName} · ₹${s.total}`,
+  }));
+  openForm('New Return / Refund',
+    [
+      { name: 'saleId', label: 'Select invoice', type: 'select', required: true, options: [{ value: '', label: '-- Choose --' }, ...options] },
+      { name: 'refundMethod', label: 'Refund method', type: 'select', options: [
+        { value: 'cash', label: '💵 Cash' },
+        { value: 'upi', label: '💳 UPI' },
+        { value: 'adjust_due', label: '📝 Adjust against due' },
+      ]},
+      { name: 'note', label: 'Reason / Note', type: 'textarea' },
+    ], {}, async d => {
+      const sale = A.sales.find(s => s.id === d.saleId);
+      if (!sale) throw new Error('Select a valid invoice');
+      const shopRef = TP.db.collection('shops').doc(A.shopId);
+      const batch = TP.db.batch();
+      const ref = shopRef.collection('returns').doc();
+      batch.set(ref, {
+        saleId: sale.id, invoiceNo: sale.invoiceNo,
+        customerId: sale.customerId || null, customerName: sale.customerName,
+        items: sale.items.map(it => ({ ...it })),
+        total: sale.total, refundMethod: d.refundMethod,
+        note: (d.note || '').trim(),
+        salesmanName: A.profile.name,
+        returnDate: TP.FV.serverTimestamp(),
+      });
+      for (const it of sale.items) {
+        const p = A.products.find(x => x.id === it.productId);
+        if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty || 0) + (+it.qty || 0) });
+      }
+      if (d.refundMethod === 'adjust_due' && sale.customerId) {
+        const c = A.customers.find(x => x.id === sale.customerId);
+        if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: Math.max(0, (+c.due || 0) - sale.total) });
+      }
+      await batch.commit();
+      TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'RETURN', `${sale.invoiceNo} ₹${sale.total}`);
+      TP.toast('Return recorded', 'success');
+    });
+}
+
+/* ============================================================
+   CASH REGISTER (SHIFT)
+   ============================================================ */
+async function restoreCurrentShift() {
+  try {
+    const raw = localStorage.getItem('tp_current_shift');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.shopId !== A.shopId || s.userId !== A.profile.uid) return;
+    const doc = await TP.db.collection('shops').doc(A.shopId).collection('shifts').doc(s.shiftId).get();
+    if (!doc.exists || doc.data().status === 'closed') { localStorage.removeItem('tp_current_shift'); return; }
+    A.currentShiftId = s.shiftId;
+    A.currentShift = { id: s.shiftId, ...doc.data() };
+  } catch (e) { console.warn(e); }
+}
+
+function renderShift() {
+  const el = document.getElementById('page-shift');
+  if (!A.currentShiftId) {
+    el.innerHTML = `
+      <div class="p-3 space-y-3">
+        <div class="bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-300 rounded-2xl p-5 text-center">
+          <div class="text-5xl mb-2">💰</div>
+          <div class="font-bold text-lg">No Active Shift</div>
+          <p class="text-xs text-gray-600 mt-1">Open a shift to track cash</p>
+        </div>
+        <button id="openShiftBtn" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg">🔓 Open Shift</button>
+        <h3 class="text-sm font-bold text-gray-500 mt-4">Past Shifts</h3>
+        <div class="space-y-2">
+          ${A.shifts.map(s => `
+            <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div class="flex justify-between items-center">
+                <div>
+                  <div class="font-semibold text-sm">${TP.fmtDate(s.openedAt)}</div>
+                  <div class="text-[10px] text-gray-500">${s.salesmanName || 'Admin'}</div>
+                </div>
+                <div class="text-right">
+                  <div class="font-bold text-${s.variance >= 0 ? 'green' : 'red'}-600">${TP.money(s.variance || 0)}</div>
+                  <div class="text-[10px] text-gray-400">variance</div>
+                </div>
+              </div>
+            </div>
+          `).join('') || '<div class="text-center text-gray-400 py-8">No shifts yet</div>'}
+        </div>
+      </div>`;
+    document.getElementById('openShiftBtn').addEventListener('click', openShift);
+    return;
+  }
+
+  const shift = A.currentShift;
+  const shiftSales = A.sales.filter(s => s.saleDate?.toDate && s.saleDate.toDate() >= (shift.openedAt?.toDate?.() || new Date(0)));
+  const cashSales = shiftSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + (+s.paid || 0), 0);
+  const upiSales = shiftSales.filter(s => s.paymentMethod === 'upi').reduce((a, s) => a + (+s.paid || 0), 0);
+  const otherSales = shiftSales.filter(s => !['cash','upi'].includes(s.paymentMethod)).reduce((a, s) => a + (+s.paid || 0), 0);
+  const expectedCash = (+shift.openingCash || 0) + cashSales;
+
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-2xl p-4">
+        <div class="flex justify-between items-center mb-2">
+          <div class="text-xs font-bold text-green-700">🟢 SHIFT ACTIVE</div>
+          <div class="text-[10px] text-gray-500">${TP.fmtDate(shift.openedAt)}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-xs">
+          <div class="bg-white/60 rounded-lg p-2">
+            <div class="text-gray-500">Opening Cash</div>
+            <div class="font-bold text-sm">${TP.money(shift.openingCash)}</div>
+          </div>
+          <div class="bg-white/60 rounded-lg p-2">
+            <div class="text-gray-500">Expected Cash</div>
+            <div class="font-bold text-sm text-green-700">${TP.money(expectedCash)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">Cash</div>
+          <div class="font-bold text-sm text-green-600 mt-0.5">${TP.money(cashSales)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">UPI</div>
+          <div class="font-bold text-sm text-blue-600 mt-0.5">${TP.money(upiSales)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-2.5 text-center border border-gray-100">
+          <div class="text-[10px] text-gray-500">Other</div>
+          <div class="font-bold text-sm text-purple-600 mt-0.5">${TP.money(otherSales)}</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100">
+        <div class="text-xs font-bold mb-2">Transactions: ${shiftSales.length}</div>
+        <div class="text-xs text-gray-500">Total: ${TP.money(shiftSales.reduce((a, s) => a + (+s.total || 0), 0))}</div>
+      </div>
+      <button id="closeShiftBtn" class="w-full bg-red-600 text-white py-4 rounded-xl font-bold shadow-lg">🔒 Close Shift</button>
+    </div>`;
+
+  document.getElementById('closeShiftBtn').addEventListener('click', () => closeShift(expectedCash));
+}
+
+async function openShift() {
+  openForm('Open Shift',
+    [{ name: 'openingCash', label: 'Opening Cash (₹)', type: 'number', required: true, min: 0, step: '0.01', default: 0 }],
+    {}, async d => {
+      const ref = await TP.db.collection('shops').doc(A.shopId).collection('shifts').add({
+        openingCash: +d.openingCash || 0,
+        status: 'open',
+        salesmanId: A.profile.uid,
+        salesmanName: A.profile.name,
+        openedAt: TP.FV.serverTimestamp(),
+      });
+      A.currentShiftId = ref.id;
+      localStorage.setItem('tp_current_shift', JSON.stringify({ shiftId: ref.id, shopId: A.shopId, userId: A.profile.uid }));
+      TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'SHIFT_OPEN', `Opening: ₹${d.openingCash}`);
+      TP.toast('Shift opened', 'success');
+      renderShift();
+    });
+}
+
+async function closeShift(expectedCash) {
+  const result = await new Promise(res => {
+    const old = document.getElementById('_closeShiftModal');
+    if (old) old.remove();
+    const modal = document.createElement('div');
+    modal.id = '_closeShiftModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:22px;max-width:400px;width:100%;padding:22px">
+        <h3 style="font-weight:800;font-size:17px;margin:0 0 6px">🔒 Close Shift</h3>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 14px">Expected cash: <b>₹${expectedCash.toFixed(2)}</b></p>
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Actual cash counted (₹)</label>
+        <input id="_csActual" type="number" min="0" step="0.01" placeholder="Enter counted cash" style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:16px;box-sizing:border-box;margin-bottom:8px">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Note (optional)</label>
+        <input id="_csNote" placeholder="Any discrepancies?" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-family:inherit;margin-bottom:14px;box-sizing:border-box">
+        <div style="display:flex;gap:8px">
+          <button id="_csCancel" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;font-family:inherit">Cancel</button>
+          <button id="_csConfirm" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;font-family:inherit">Close Shift</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('_csCancel').onclick = () => { modal.remove(); res(null); };
+    document.getElementById('_csConfirm').onclick = () => {
+      const actual = +document.getElementById('_csActual').value || 0;
+      const note = document.getElementById('_csNote').value || '';
+      modal.remove();
+      res({ actual, note });
+    };
+  });
+  if (!result) return;
+  const variance = result.actual - expectedCash;
+  await TP.db.collection('shops').doc(A.shopId).collection('shifts').doc(A.currentShiftId).update({
+    status: 'closed', closingCash: result.actual, expectedCash,
+    variance, note: result.note, closedAt: TP.FV.serverTimestamp(),
+  });
+  TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'SHIFT_CLOSE', `Variance: ₹${variance.toFixed(2)}`);
+  A.currentShiftId = null;
+  A.currentShift = null;
+  localStorage.removeItem('tp_current_shift');
+  TP.toast('Shift closed', 'success');
+  renderShift();
+}
+
+/* ============================================================
+   REPORTS
+   ============================================================ */
+function renderReports() {
+  const el = document.getElementById('page-reports');
+  const periods = { today: 'Today', week: '7 days', month: '30 days', all: 'All' };
+  const getStart = () => {
+    const now = new Date();
+    if (A.reportPeriod === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (A.reportPeriod === 'week')  return new Date(now.getTime() - 7*24*60*60*1000);
+    if (A.reportPeriod === 'month') return new Date(now.getTime() - 30*24*60*60*1000);
+    return new Date(0);
+  };
+  const start = getStart();
+  const filtered = A.sales.filter(s => {
+    const d = s.saleDate?.toDate ? s.saleDate.toDate() : new Date(s.saleDate);
+    return d >= start;
+  });
+  const totalSales = filtered.reduce((a, s) => a + (+s.total||0), 0);
+  const totalPaid  = filtered.reduce((a, s) => a + (+s.paid||0), 0);
+  const totalDue   = filtered.reduce((a, s) => a + (+s.due||0), 0);
+  const totalDisc  = filtered.reduce((a, s) => a + (+s.discount||0), 0);
+  const productMap = {};
+  filtered.forEach(s => s.items?.forEach(it => {
+    if (!productMap[it.productId]) productMap[it.productId] = { name: it.name, qty: 0, total: 0 };
+    productMap[it.productId].qty += +it.qty || 0;
+    productMap[it.productId].total += (+it.qty||0) * (+it.price||0);
+  }));
+  const topProducts = Object.values(productMap).sort((a,b) => b.total - a.total).slice(0, 10);
+  const salesmanMap = {};
+  filtered.forEach(s => {
+    if (!salesmanMap[s.salesmanId]) salesmanMap[s.salesmanId] = { name: s.salesmanName, count: 0, total: 0 };
+    salesmanMap[s.salesmanId].count++;
+    salesmanMap[s.salesmanId].total += +s.total || 0;
+  });
+  const topSalesmen = Object.values(salesmanMap).sort((a,b) => b.total - a.total);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="flex gap-2 overflow-x-auto">
+        ${Object.entries(periods).map(([k,v]) => `<button data-period="${k}" class="period-btn flex-shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap ${A.reportPeriod===k?'bg-blue-600 text-white':'bg-white text-gray-600 border-2 border-gray-200'}">${v}</button>`).join('')}
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Total Sales</div>
+          <div class="text-xl font-extrabold text-blue-600 mt-1">${TP.money(totalSales)}</div>
+          <div class="text-[10px] text-gray-400">${filtered.length} transactions</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Received</div>
+          <div class="text-xl font-extrabold text-green-600 mt-1">${TP.money(totalPaid)}</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Due</div>
+          <div class="text-xl font-extrabold text-red-600 mt-1">${TP.money(totalDue)}</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div class="text-[11px] text-gray-500">Discount</div>
+          <div class="text-xl font-extrabold text-orange-500 mt-1">${TP.money(totalDisc)}</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-3">🏆 Top Products</h3>
+        ${topProducts.length ? topProducts.map((p, i) => `<div class="flex justify-between py-1.5 text-sm">
+          <div><span class="text-gray-400 mr-2">${i+1}.</span>${TP.esc(p.name)}</div>
+          <div class="text-right"><div class="font-bold text-blue-600">${TP.money(p.total)}</div>
+            <div class="text-[10px] text-gray-400">${p.qty}</div></div>
+        </div>`).join('') : '<div class="text-gray-400 text-sm">No data</div>'}
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-3">👥 Salesman Performance</h3>
+        ${topSalesmen.length ? topSalesmen.map((s, i) => `<div class="flex justify-between py-1.5 text-sm">
+          <div><span class="text-gray-400 mr-2">${i+1}.</span>${TP.esc(s.name)}</div>
+          <div class="text-right"><div class="font-bold text-blue-600">${TP.money(s.total)}</div>
+            <div class="text-[10px] text-gray-400">${s.count}</div></div>
+        </div>`).join('') : '<div class="text-gray-400 text-sm">No data</div>'}
+      </div>
+    </div>`;
+  el.querySelectorAll('.period-btn').forEach(b => b.addEventListener('click', () => { A.reportPeriod = b.dataset.period; renderReports(); }));
+}
+
+/* ============================================================
+   ANALYTICS
+   ============================================================ */
+function renderAnalytics() {
+  const el = document.getElementById('page-analytics');
+  const days = 14;
+  const daily = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = TP.todayKey(d);
+    const daySales = A.sales.filter(s => {
+      const sd = s.saleDate?.toDate ? s.saleDate.toDate() : new Date(s.saleDate);
+      return TP.todayKey(sd) === key;
+    });
+    daily.push({
+      label: String(d.getDate()) + '/' + String(d.getMonth()+1),
+      total: daySales.reduce((a, s) => a + (+s.total || 0), 0),
+    });
+  }
+  const maxVal = Math.max(1, ...daily.map(d => d.total));
+
+  const catMap = {};
+  A.sales.forEach(s => s.items?.forEach(it => {
+    const p = A.products.find(x => x.id === it.productId);
+    const cat = p?.category || 'Uncategorized';
+    catMap[cat] = (catMap[cat] || 0) + (+it.qty || 0) * (+it.price || 0);
+  }));
+  const catList = Object.entries(catMap).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const catMax = Math.max(1, ...catList.map(x => x[1]));
+
+  // Forecast
+  const monthly = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = TP.todayKey(d);
+    const total = A.sales.filter(s => {
+      const sd = s.saleDate?.toDate ? s.saleDate.toDate() : new Date(s.saleDate);
+      return TP.todayKey(sd) === key;
+    }).reduce((a, s) => a + (+s.total || 0), 0);
+    monthly.push({ total });
+  }
+  const forecast = TP.forecastSales(monthly, 7);
+  const next7 = forecast.predictions.reduce((a,b) => a+b, 0);
+  const trendPct = forecast.avg > 0 ? ((forecast.trend / forecast.avg) * 100).toFixed(1) : 0;
+
+  el.innerHTML = `
+    <div class="p-3 space-y-4">
+      <div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-4">
+        <h3 class="font-bold text-sm mb-3">🤖 AI Sales Forecast</h3>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div class="bg-white/70 rounded-xl p-3">
+            <div class="text-[10px] text-gray-500">Next 7 days</div>
+            <div class="text-lg font-extrabold text-purple-700">${TP.money(next7)}</div>
+          </div>
+          <div class="bg-white/70 rounded-xl p-3">
+            <div class="text-[10px] text-gray-500">Trend</div>
+            <div class="text-lg font-extrabold ${forecast.trend >= 0 ? 'text-green-600' : 'text-red-600'}">
+              ${forecast.trend >= 0 ? '↑' : '↓'} ${Math.abs(trendPct)}%
+            </div>
+          </div>
+        </div>
+        <div class="text-[10px] text-gray-500">Based on last 30 days</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-sm mb-3">📈 Last 14 Days</h3>
+        <div class="flex items-end gap-1" style="height:130px">
+          ${daily.map(d => `
+            <div class="flex-1 flex flex-col items-center justify-end" title="${d.label}: ₹${d.total.toFixed(0)}">
+              <div class="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style="height:${Math.max(4, d.total/maxVal*110)}px"></div>
+              <div class="text-[8px] text-gray-400 mt-1">${d.label}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-sm mb-3">🏷️ Category Breakdown</h3>
+        ${catList.length ? catList.map(([cat, amt]) => `
+          <div class="mb-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-gray-700 font-medium">${TP.esc(cat)}</span>
+              <span class="font-bold">${TP.money(amt)}</span>
+            </div>
+            <div class="h-1.5 bg-gray-100 rounded-full mt-1">
+              <div class="h-full bg-purple-500 rounded-full" style="width:${amt/catMax*100}%"></div>
+            </div>
+          </div>
+        `).join('') : '<div class="text-gray-400 text-xs text-center py-4">No data</div>'}
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-sm mb-3">💳 Payment Methods</h3>
+        ${(() => {
+          const methods = {};
+          A.sales.forEach(s => { methods[s.paymentMethod || 'cash'] = (methods[s.paymentMethod || 'cash'] || 0) + (+s.total || 0); });
+          const total = Object.values(methods).reduce((a,b) => a+b, 0) || 1;
+          const colors = { cash:'#16a34a', upi:'#2563eb', bkash:'#dc2626', card:'#7c3aed', bank:'#ea580c', credit:'#f59e0b', split:'#06b6d4' };
+          return Object.entries(methods).sort((a,b) => b[1]-a[1]).map(([m, amt]) => `
+            <div class="mb-2">
+              <div class="flex justify-between text-xs">
+                <span class="capitalize font-medium">${m} (${(amt/total*100).toFixed(0)}%)</span>
+                <span class="font-bold">${TP.money(amt)}</span>
+              </div>
+              <div class="h-1.5 bg-gray-100 rounded-full mt-1">
+                <div class="h-full rounded-full" style="width:${amt/total*100}%;background:${colors[m] || '#666'}"></div>
+              </div>
+            </div>
+          `).join('') || '<div class="text-gray-400 text-xs text-center py-4">No data</div>';
+        })()}
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   ACTIVITY LOG
+   ============================================================ */
+function renderActivityLog() {
+  const el = document.getElementById('page-activity');
+  const iconMap = { SALE:'🛒', PRODUCT_ADD:'📦', PRODUCT_EDIT:'✏️', PRODUCT_DELETE:'🗑', CUSTOMER_ADD:'👤', SHIFT_OPEN:'🔓', SHIFT_CLOSE:'🔒', CSV_IMPORT:'📥', RETURN:'↩️', PURCHASE:'📥', EXPENSE:'💸', CAMPAIGN:'📢', SALESMAN_ADD:'👥' };
+  el.innerHTML = `
+    <div class="p-3 space-y-2">
+      ${A.activityLogs.length ? A.activityLogs.slice(0, 200).map(l => `
+        <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start gap-3">
+          <div class="text-2xl">${iconMap[l.action] || '📌'}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm">${TP.esc(l.action || '')}</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">${TP.esc(l.details || '')}</div>
+            <div class="text-[10px] text-gray-400 mt-1">${TP.esc(l.userName || '')} · ${TP.fmtDate(l.timestamp)}</div>
+          </div>
+        </div>
+      `).join('') : '<div class="bg-white rounded-xl p-8 text-center text-gray-400">No activity yet</div>'}
+    </div>`;
+}
+
+/* ============================================================
+   ATTENDANCE
+   ============================================================ */
+function renderAttendance() {
+  const el = document.getElementById('page-attendance');
+  const todayKey_ = TP.todayKey();
+  const today = A.attendance.filter(a => {
+    const d = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+    return TP.todayKey(d) === todayKey_;
+  });
+  const salesmenToday = {};
+  today.filter(a => a.action === 'SALE').forEach(a => {
+    if (!salesmenToday[a.userId]) salesmenToday[a.userId] = { name: a.userName, count: 0, total: 0 };
+    salesmenToday[a.userId].count++;
+    salesmenToday[a.userId].total += (+a.meta?.total || 0);
+  });
+
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-2xl p-4">
+        <div class="text-xs font-medium text-gray-600">Today's Activity</div>
+        <div class="text-2xl font-extrabold text-blue-700 mt-1">${today.length} actions</div>
+      </div>
+      <h3 class="text-sm font-bold text-gray-500">👥 Today's Salesmen</h3>
+      <div class="space-y-2">
+        ${Object.entries(salesmenToday).length ? Object.entries(salesmenToday).map(([uid, data]) => `
+          <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex justify-between items-center">
+            <div>
+              <div class="font-semibold text-sm">${TP.esc(data.name)}</div>
+              <div class="text-[10px] text-gray-500">${data.count} sales</div>
+            </div>
+            <div class="font-bold text-blue-600">${TP.money(data.total)}</div>
+          </div>
+        `).join('') : '<div class="bg-white rounded-xl p-6 text-center text-gray-400 text-sm">No activity yet today</div>'}
+      </div>
+      <h3 class="text-sm font-bold text-gray-500 mt-3">📋 Recent Activity</h3>
+      <div class="space-y-2">
+        ${A.attendance.slice(0, 50).map(a => `
+          <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex justify-between items-center text-xs">
+            <div>
+              <div class="font-semibold">${TP.esc(a.userName)}</div>
+              <div class="text-[10px] text-gray-500">${TP.esc(a.action)}</div>
+            </div>
+            <div class="text-[10px] text-gray-400">${TP.fmtDate(a.timestamp)}</div>
+          </div>
+        `).join('') || '<div class="text-center text-gray-400 py-6 text-sm">No activity</div>'}
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   CAMPAIGN
+   ============================================================ */
+function renderCampaign() {
+  const el = document.getElementById('page-campaign');
+  const customersWithPhone = A.customers.filter(c => c.phone);
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
+        <div class="text-xs font-medium text-gray-600">Customers with phone</div>
+        <div class="text-2xl font-extrabold text-green-700 mt-1">${customersWithPhone.length}</div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <label class="text-xs font-bold text-gray-700 mb-2 block">Message template</label>
+        <textarea id="campaignMsg" rows="5" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm" placeholder="Dear {name}, offer at {shop}...">🎉 *Special Offer!*
+Dear {name},
+
+Exciting offers this week at *{shop}*!
+
+Visit us today for amazing deals.
+
+Thank you! 🙏</textarea>
+        <p class="text-[10px] text-gray-400 mt-2">Variables: <code>{name}</code> <code>{shop}</code></p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <label class="text-xs font-bold text-gray-700">Recipients (${customersWithPhone.length})</label>
+          <button id="selectAllCust" class="text-xs text-blue-600 underline">Select all</button>
+        </div>
+        <div id="campaignList" class="space-y-1.5 max-h-72 overflow-y-auto">
+          ${customersWithPhone.map(c => `
+            <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" class="campaign-cust" value="${c.id}">
+              <div class="flex-1 min-w-0">
+                <div class="text-xs font-semibold truncate">${TP.esc(c.name)}</div>
+                <div class="text-[10px] text-gray-500">${TP.esc(c.phone)}</div>
+              </div>
+            </label>
+          `).join('') || '<div class="text-center text-gray-400 py-6 text-sm">No customers with phone</div>'}
+        </div>
+      </div>
+      <button id="campaignSendBtn" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg">📢 Send to Selected</button>
+      <div id="campaignStatus" class="text-xs text-center text-gray-500 hidden"></div>
+    </div>`;
+
+  document.getElementById('selectAllCust')?.addEventListener('click', () => {
+    document.querySelectorAll('.campaign-cust').forEach(cb => cb.checked = true);
+  });
+
+  document.getElementById('campaignSendBtn')?.addEventListener('click', async () => {
+    const template = document.getElementById('campaignMsg').value;
+    const selected = Array.from(document.querySelectorAll('.campaign-cust:checked')).map(cb => cb.value);
+    if (!selected.length) { TP.toast('Select at least one customer', 'warn'); return; }
+    const customers = A.customers.filter(c => selected.includes(c.id));
+    const settings = A.profile.shop.settings || {};
+    let sent = 0;
+    const status = document.getElementById('campaignStatus');
+    status.classList.remove('hidden');
+    status.textContent = 'Sending... (WhatsApp tabs will open)';
+    for (const c of customers) {
+      const msg = TP.buildCampaignMessage(template, c, settings);
+      TP.openWhatsApp(c.phone, msg);
+      sent++;
+      status.textContent = `Sent ${sent}/${customers.length}...`;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    status.textContent = `✅ Opened ${sent} WhatsApp chats.`;
+    await TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'CAMPAIGN', `${sent} messages sent`);
+  });
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+function renderSettings() {
+  const el = document.getElementById('page-settings');
+  const s = A.profile.shop.settings || {};
+  el.innerHTML = `
+    <div class="p-3 space-y-3">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-2">🏪 Shop Info</h3>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-xs text-gray-500">Shop ID:</span>
+          <span class="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-sm">${TP.esc(A.shopId)}</span>
+          <button id="copyShopId" class="text-xs text-gray-500 underline">Copy</button>
+        </div>
+        <div class="space-y-2">
+          <input id="setShopName" value="${TP.esc(s.shopName || A.profile.shop.shopName)}" placeholder="Shop name"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+          <textarea id="setShopAddr" rows="2" placeholder="Address"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">${TP.esc(s.shopAddress||'')}</textarea>
+          <input id="setShopPhone" value="${TP.esc(s.shopPhone||'')}" placeholder="Mobile"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+
+          <div class="border-t border-gray-200 mt-3 pt-3">
+            <div class="text-xs font-bold text-gray-700 mb-2">💳 UPI Payment</div>
+            <input id="setUPI" value="${TP.esc(s.upiId||'')}" placeholder="e.g. 9876543210@paytm"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-2 font-mono text-sm">
+            <input id="setUPIName" value="${TP.esc(s.upiName||'')}" placeholder="UPI name (optional)"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+          </div>
+
+          <div class="border-t border-gray-200 mt-3 pt-3">
+            <div class="text-xs font-bold text-gray-700 mb-2">🧾 GST Info</div>
+            <input id="setGSTIN" value="${TP.esc(s.gstin||'')}" placeholder="GSTIN e.g. 22AAAAA0000A1Z5"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-2 font-mono text-xs">
+            <input id="setGSTRate" type="number" value="${TP.esc(s.gstRate||0)}" placeholder="GST Rate %"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+          </div>
+
+          <button id="saveSettings" class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold mt-2">Save Settings</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-2">👤 Account</h3>
+        <div class="text-sm space-y-1">
+          <div class="flex justify-between"><span class="text-gray-500">Name</span><b>${TP.esc(A.profile.name)}</b></div>
+          <div class="flex justify-between"><span class="text-gray-500">Email</span><b class="font-mono text-xs">${TP.esc(A.profile.email||'')}</b></div>
+          <div class="flex justify-between"><span class="text-gray-500">Role</span><b>Admin</b></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-3">🎨 Appearance</h3>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm">🌙 Dark Mode</span>
+          <button id="darkToggle" class="px-4 py-1.5 rounded-lg font-semibold text-sm ${TP.getDarkMode() ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">
+            ${TP.getDarkMode() ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm">🌐 Language</span>
+          <div class="flex gap-1">
+            <button data-lang="en" class="px-3 py-1.5 rounded-lg font-semibold text-xs ${TP.getLang()==='en' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">EN</button>
+            <button data-lang="hi" class="px-3 py-1.5 rounded-lg font-semibold text-xs ${TP.getLang()==='hi' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">हिं</button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm">📱 Install as App</span>
+          <button id="pwaInstall" class="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-semibold text-xs">Install</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-2">📱 Remote Scanner</h3>
+        <p class="text-xs text-gray-500 mb-3">Connect a separate phone to scan products</p>
+        <div id="scannerSessionBox"></div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-2">💳 Payment Device</h3>
+        <p class="text-xs text-gray-500 mb-3">Connect a separate phone/tablet to display UPI QR</p>
+        <div id="paymentDeviceBox"></div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-3">🔐 Change Password</h3>
+        <input id="oldPass" type="password" placeholder="Current password" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mb-2 focus:border-blue-500 focus:outline-none">
+        <input id="newPass" type="password" placeholder="New password" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mb-2 focus:border-blue-500 focus:outline-none">
+        <input id="newPass2" type="password" placeholder="Confirm new password" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl mb-3 focus:border-blue-500 focus:outline-none">
+        <button id="changePass" class="w-full bg-gray-800 text-white py-3 rounded-xl font-semibold">Change Password</button>
+      </div>
+    </div>`;
+
+  renderScannerSessionBox();
+  renderPaymentDeviceBox();
+
+  document.getElementById('copyShopId').addEventListener('click', async () => { await TP.copyText(A.shopId); TP.toast('Copied', 'success'); });
+  document.getElementById('saveSettings').addEventListener('click', async () => {
+    const settings = {
+      shopName: document.getElementById('setShopName').value.trim() || A.profile.shop.shopName,
+      shopAddress: document.getElementById('setShopAddr').value.trim(),
+      shopPhone: document.getElementById('setShopPhone').value.trim(),
+      upiId: document.getElementById('setUPI').value.trim(),
+      upiName: document.getElementById('setUPIName').value.trim(),
+      gstin: document.getElementById('setGSTIN').value.trim(),
+      gstRate: +document.getElementById('setGSTRate').value || 0,
+    };
+    try {
+      await TP.db.collection('shops').doc(A.shopId).update({ settings, shopName: settings.shopName });
+      TP.toast('Settings saved', 'success');
+    } catch (e) { TP.toast(e.message, 'error'); }
+  });
+  document.getElementById('darkToggle').addEventListener('click', () => { TP.toggleDarkMode(); renderSettings(); });
+  el.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => TP.setLang(b.dataset.lang)));
+  document.getElementById('pwaInstall').addEventListener('click', () => TP.promptPWAInstall());
+  document.getElementById('changePass').addEventListener('click', async () => {
+    const oldP = document.getElementById('oldPass').value;
+    const np = document.getElementById('newPass').value;
+    const np2 = document.getElementById('newPass2').value;
+    if (np !== np2) { TP.toast('Passwords do not match', 'error'); return; }
+    if (np.length < 6) { TP.toast('At least 6 characters', 'error'); return; }
+    try {
+      const cred = firebase.auth.EmailAuthProvider.credential(TP.auth.currentUser.email, oldP);
+      await TP.auth.currentUser.reauthenticateWithCredential(cred);
+      await TP.auth.currentUser.updatePassword(np);
+      TP.toast('Password changed', 'success');
+      document.getElementById('oldPass').value = '';
+      document.getElementById('newPass').value = '';
+      document.getElementById('newPass2').value = '';
+    } catch (err) {
+      let msg = 'Change failed';
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') msg = 'Current password is wrong';
+      if (err.code === 'auth/weak-password') msg = 'Password too weak';
+      TP.toast(msg, 'error');
+    }
+  });
+}
+
+/* ============================================================
+   SCANNER SESSION
+   ============================================================ */
+function renderScannerSessionBox() {
+  const box = document.getElementById('scannerSessionBox');
+  if (!box) return;
+  if (!A.scannerSessionId) {
+    box.innerHTML = `
+      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl p-3 mb-3 text-center">
+        <div class="text-3xl mb-1">📱</div>
+        <div class="text-xs text-gray-600">No scanner connected</div>
+      </div>
+      <button id="btnStartScanner" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg active:scale-[.98]">📷 Connect Scanner Device</button>`;
+    document.getElementById('btnStartScanner').addEventListener('click', startScannerSession);
+    return;
+  }
+  box.innerHTML = `
+    <div class="bg-blue-50 border border-blue-300 rounded-xl p-3 mb-3">
+      <div class="flex items-center gap-2 mb-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 pulse"></span>
+        <span class="font-bold text-sm text-blue-700">Session Active</span></div>
+      <div class="text-[11px] text-gray-600 font-mono break-all mb-2">${TP.esc(A.scannerSessionId)}</div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="btnShowQR" class="bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm active:scale-95">📱 Show QR</button>
+      <button id="btnStopScanner" class="bg-red-50 text-red-600 py-3 rounded-xl font-semibold text-sm active:scale-95">⛔ Disconnect</button>
+    </div>`;
+  document.getElementById('btnShowQR').addEventListener('click', () => showSessionQR(A.scannerSessionId));
+  document.getElementById('btnStopScanner').addEventListener('click', stopScannerSession);
+}
+
+async function startScannerSession() {
+  try {
+    TP.toast('Generating QR...', 'info');
+    const sessionId = await TP.createScannerSession(A.shopId, A.profile.uid, A.profile.name, A.profile.shop?.shopName || '');
+    A.scannerSessionId = sessionId;
+    localStorage.setItem('tp_scanner_session', JSON.stringify({ sessionId, salesmanId: A.profile.uid }));
+    setupScannerScanListener(sessionId);
+    renderScannerSessionBox();
+    showSessionQR(sessionId);
+    TP.toast('QR ready', 'success');
+  } catch (e) { console.error(e); TP.toast('Failed: ' + (e.message || ''), 'error'); }
+}
+
+async function stopScannerSession() {
+  if (!A.scannerSessionId) return;
+  if (!await TP.askConfirm('Disconnect scanner?')) return;
+  const sid = A.scannerSessionId;
+  A.scannerSessionId = null;
+  localStorage.removeItem('tp_scanner_session');
+  if (A.scannerUnsub) { try { A.scannerUnsub(); } catch {} A.scannerUnsub = null; }
+  await TP.deleteScannerSession(sid);
+  renderScannerSessionBox();
+  TP.toast('Disconnected', 'success');
+}
+
+async function showSessionQR(sessionId) {
+  const url = TP.buildScannerURL(sessionId);
+  const old = document.getElementById('_scannerQRModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_scannerQRModal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto`;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:22px;max-width:420px;width:100%;padding:22px;text-align:center">
+      <div style="font-size:38px;margin-bottom:4px">📱</div>
+      <h3 style="font-weight:800;font-size:18px;margin:0 0 4px">Connect Scanner</h3>
+      <p style="color:#6b7280;font-size:12px;margin:0 0 14px">Scan QR with another phone</p>
+      <div id="_sqrLoading" style="padding:30px;color:#6b7280">Generating QR...</div>
+      <div id="_sqrWrap" style="display:none">
+        <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block;border:2px solid #2563eb">
+          <img id="_sqrImg" style="width:240px;height:240px;display:block">
+        </div>
+        <div id="_sqrStatus" style="margin-top:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:8px;font-size:12px;color:#1e40af;font-weight:600">⏳ Waiting...</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button id="_sqrCopy" style="flex:1;background:#2563eb;color:#fff;padding:11px;border:none;border-radius:10px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">📋 Copy URL</button>
+        <button id="_sqrClose" style="flex:1;background:#f3f4f6;color:#374151;padding:11px;border:none;border-radius:10px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  try {
+    const dataURL = await TP.generateQRDataURL(url, 600);
+    document.getElementById('_sqrLoading').style.display = 'none';
+    document.getElementById('_sqrWrap').style.display = '';
+    document.getElementById('_sqrImg').src = dataURL;
+  } catch (e) { document.getElementById('_sqrLoading').textContent = '⚠️ QR failed'; }
+  const unsub = TP.db.collection('scannerSessions').doc(sessionId).onSnapshot(snap => {
+    if (!snap.exists) { unsub(); modal.remove(); return; }
+    const d = snap.data();
+    const el = document.getElementById('_sqrStatus');
+    if (el && d.scannerConnected) { el.style.background = '#dbeafe'; el.style.color = '#1e40af'; el.innerHTML = '✅ Scanner connected!'; }
+  });
+  document.getElementById('_sqrCopy').onclick = async () => { await TP.copyText(url); TP.toast('Copied', 'success'); };
+  document.getElementById('_sqrClose').onclick = () => { unsub(); modal.remove(); };
+  modal.addEventListener('click', e => { if (e.target === modal) { unsub(); modal.remove(); } });
+}
+
+function setupScannerScanListener(sessionId) {
+  if (A.scannerUnsub) { try { A.scannerUnsub(); } catch {} A.scannerUnsub = null; }
+  A.scannerUnsub = TP.db.collection('scannerSessions').doc(sessionId).collection('scans')
+    .where('processed', '==', false).onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        const code = String(data.barcode || '').trim();
+        if (!code) return;
+        const product = A.products.find(p => String(p.barcode || '').trim() === code);
+        if (product) {
+          if ((+product.stockQty || 0) <= 0) TP.toast('📱 ' + product.name + ' — Out of stock!', 'error');
+          else { addToCart(product.id); TP.toast('📱 ' + product.name + ' added', 'success'); if (A.currentPage !== 'pos') goTo('pos'); }
+        } else TP.toast('📱 Barcode not found: ' + code, 'error');
+        change.doc.ref.delete().catch(() => {});
+      });
+    }, err => console.error('scan listener:', err));
+}
+
+async function restoreScannerSession() {
+  try {
+    const raw = localStorage.getItem('tp_scanner_session');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.salesmanId !== A.profile.uid) { localStorage.removeItem('tp_scanner_session'); return; }
+    const doc = await TP.db.collection('scannerSessions').doc(s.sessionId).get();
+    if (!doc.exists) { localStorage.removeItem('tp_scanner_session'); return; }
+    A.scannerSessionId = s.sessionId;
+    setupScannerScanListener(s.sessionId);
+  } catch (e) { console.error(e); }
+}
+
+/* ============================================================
+   PAYMENT DEVICE
+   ============================================================ */
+function renderPaymentDeviceBox() {
+  const box = document.getElementById('paymentDeviceBox');
+  if (!box) return;
+  const s = A.profile.shop.settings || {};
+  if (!s.upiId) {
+    box.innerHTML = `<div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">⚠️ Set UPI ID first</div>`;
+    return;
+  }
+  if (!A.paymentSessionId) {
+    box.innerHTML = `
+      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl p-3 mb-3 text-center">
+        <div class="text-3xl mb-1">💳</div>
+        <div class="text-xs text-gray-600">No payment device connected</div>
+        <div class="text-[10px] text-gray-400 mt-1">UPI: ${TP.esc(s.upiId)}</div>
+      </div>
+      <button id="btnStartPayment" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg active:scale-[.98]">📷 Connect Payment Device</button>`;
+    document.getElementById('btnStartPayment').addEventListener('click', startPaymentDevice);
+    return;
+  }
+  box.innerHTML = `
+    <div class="bg-blue-50 border border-blue-300 rounded-xl p-3 mb-3">
+      <div class="flex items-center gap-2 mb-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 pulse"></span>
+        <span class="font-bold text-sm text-blue-700">Session Active</span></div>
+      <div class="text-[11px] text-gray-600 font-mono break-all mb-2">${TP.esc(A.paymentSessionId)}</div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="btnShowPayQR" class="bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm active:scale-95">📱 Show QR</button>
+      <button id="btnStopPayment" class="bg-red-50 text-red-600 py-3 rounded-xl font-semibold text-sm active:scale-95">⛔ Disconnect</button>
+    </div>`;
+  document.getElementById('btnShowPayQR').addEventListener('click', () => showPaymentQR(A.paymentSessionId));
+  document.getElementById('btnStopPayment').addEventListener('click', stopPaymentDevice);
+}
+
+async function startPaymentDevice() {
+  try {
+    const s = A.profile.shop.settings || {};
+    if (!s.upiId) { TP.toast('Set UPI ID first', 'error'); return; }
+    TP.toast('Generating QR...', 'info');
+    const sessionId = await TP.createPaymentSession(A.shopId, A.profile.uid, A.profile.name,
+      s.shopName || A.profile.shop.shopName, s.upiId, s.upiName || '');
+    A.paymentSessionId = sessionId;
+    localStorage.setItem('tp_payment_session', JSON.stringify({ sessionId, salesmanId: A.profile.uid }));
+    renderPaymentDeviceBox();
+    showPaymentQR(sessionId);
+    TP.toast('Payment device ready', 'success');
+  } catch (e) { console.error(e); TP.toast('Failed: ' + e.message, 'error'); }
+}
+
+async function stopPaymentDevice() {
+  if (!A.paymentSessionId) return;
+  if (!await TP.askConfirm('Disconnect payment device?')) return;
+  const sid = A.paymentSessionId;
+  A.paymentSessionId = null;
+  localStorage.removeItem('tp_payment_session');
+  await TP.deletePaymentSession(sid);
+  renderPaymentDeviceBox();
+  TP.toast('Disconnected', 'success');
+}
+
+async function showPaymentQR(sessionId) {
+  const url = TP.buildPaymentURL(sessionId);
+  const old = document.getElementById('_payQRModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = '_payQRModal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto`;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:22px;max-width:420px;width:100%;padding:22px;text-align:center">
+      <div style="font-size:38px;margin-bottom:4px">💳</div>
+      <h3 style="font-weight:800;font-size:18px;margin:0 0 4px">Connect Payment Device</h3>
+      <p style="color:#6b7280;font-size:12px;margin:0 0 14px">Scan QR with another device</p>
+      <div id="_payQRLoad" style="padding:30px;color:#6b7280">Generating QR...</div>
+      <div id="_payQRWrap" style="display:none">
+        <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block;border:2px solid #2563eb">
+          <img id="_payQRImg" style="width:240px;height:240px;display:block">
+        </div>
+        <div id="_payQRStatus" style="margin-top:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:8px;font-size:12px;color:#1e40af;font-weight:600">⏳ Waiting for device...</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button id="_payQRCopy" style="flex:1;background:#2563eb;color:#fff;padding:11px;border:none;border-radius:10px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">📋 Copy URL</button>
+        <button id="_payQRClose" style="flex:1;background:#f3f4f6;color:#374151;padding:11px;border:none;border-radius:10px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  try {
+    const qr = await TP.generateQRDataURL(url, 600);
+    document.getElementById('_payQRLoad').style.display = 'none';
+    document.getElementById('_payQRWrap').style.display = '';
+    document.getElementById('_payQRImg').src = qr;
+  } catch (e) { document.getElementById('_payQRLoad').textContent = '⚠️ QR failed'; }
+  const unsub = TP.db.collection('paymentSessions').doc(sessionId).onSnapshot(snap => {
+    if (!snap.exists) { unsub(); modal.remove(); return; }
+    const d = snap.data();
+    const el = document.getElementById('_payQRStatus');
+    if (el && d.deviceConnected) { el.style.background = '#dbeafe'; el.style.color = '#1e40af'; el.innerHTML = '✅ Device connected!'; }
+  });
+  document.getElementById('_payQRCopy').onclick = async () => { await TP.copyText(url); TP.toast('Copied', 'success'); };
+  document.getElementById('_payQRClose').onclick = () => { unsub(); modal.remove(); };
+  modal.addEventListener('click', e => { if (e.target === modal) { unsub(); modal.remove(); } });
+}
+
+async function restorePaymentSession() {
+  try {
+    const raw = localStorage.getItem('tp_payment_session');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.salesmanId !== A.profile.uid) { localStorage.removeItem('tp_payment_session'); return; }
+    const doc = await TP.db.collection('paymentSessions').doc(s.sessionId).get();
+    if (!doc.exists) { localStorage.removeItem('tp_payment_session'); return; }
+    A.paymentSessionId = s.sessionId;
+  } catch (e) { console.error(e); }
+}
+
+window.goTo = goTo;
+</script>
+</body>
+</html>
