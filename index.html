@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>TextilePOS — Shop Management System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TextilePOS">
+<style>
+  body{font-family:'Inter',system-ui,sans-serif}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+  .fade{animation:fadeUp .4s ease}
+  html.dark body { background: #111827 !important; }
+  html.dark .bg-white { background: #1f2937 !important; color: #e5e7eb; }
+  html.dark .text-gray-800 { color: #e5e7eb !important; }
+  html.dark .text-gray-500 { color: #9ca3af !important; }
+</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 flex items-center justify-center p-4">
+
+<div class="w-full max-w-md fade">
+  <div class="bg-white rounded-3xl shadow-2xl p-8 text-center">
+    <div class="text-7xl mb-3">🧵</div>
+    <h1 class="text-3xl font-extrabold text-gray-800 mb-1">TextilePOS</h1>
+    <p class="text-gray-500 text-sm mb-8">Complete shop management system</p>
+
+    <div class="space-y-3">
+      <a href="login.html" class="block w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/30 transition active:scale-[.98]">
+        🔐 Login
+      </a>
+      <a href="register.html" class="block w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-green-500/30 transition active:scale-[.98]">
+        🆕 Open New Shop
+      </a>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-gray-100">
+      <div class="flex justify-around text-xs text-gray-500">
+        <div><div class="text-xl mb-1">☁️</div>Cloud Sync</div>
+        <div><div class="text-xl mb-1">📱</div>Mobile Ready</div>
+        <div><div class="text-xl mb-1">🔒</div>Secure</div>
+      </div>
+    </div>
+  </div>
+  <p class="text-center text-white/70 text-xs mt-4">Powered by Firebase · Real-time sync</p>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+/* Auto-redirect if already logged in */
+if (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey !== 'PASTE_YOUR_API_KEY_HERE') {
+  try {
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) return;
+      try {
+        const doc = await firebase.firestore().collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          location.href = doc.data().role === 'admin' ? 'admin.html' : 'salesman.html';
+        }
+      } catch (e) { console.error(e); }
+    });
+  } catch (e) { console.error(e); }
+}
+
+/* Register service worker for PWA */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
+}
+</script>
+</body>
+</html>
