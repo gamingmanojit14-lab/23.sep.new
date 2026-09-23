@@ -13,3 +13,14 @@
 };
 
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;*/
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD-QXL2_AV3D40XyVHi3BghdC16Yyydd04",
+  authDomain: "note-87f5a.firebaseapp.com",
+  projectId: "note-87f5a",
+  storageBucket: "note-87f5a.firebasestorage.app",
+  messagingSenderId: "810886755220",
+  appId: "1:810886755220:web:4006e8242950bb4fe19581",
+  
+};
+
+window.FIREBASE_CONFIG = FIREBASE_CONFIG;
