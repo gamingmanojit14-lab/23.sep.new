@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Payment Device — TextilePOS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<style>
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  body{ font-family:'Inter',system-ui,sans-serif; margin:0; }
+  .hide{ display:none !important; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+  .pulse{ animation:pulse 1.5s infinite; }
+  @keyframes pop{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+  .pop{ animation:pop .25s ease; }
+  @keyframes ringPulse{
+    0%{ box-shadow:0 0 0 0 rgba(37,99,235,.55) }
+    70%{ box-shadow:0 0 0 18px rgba(37,99,235,0) }
+    100%{ box-shadow:0 0 0 0 rgba(37,99,235,0) }
+  }
+  .ring-pulse{ animation:ringPulse 1.8s infinite; }
+  @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  .spin{ animation:spin 1.2s linear infinite; display:inline-block; }
+</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+
+<!-- LOADING -->
+<div id="loadingView" class="fixed inset-0 flex items-center justify-center z-[999] bg-gray-900">
+  <div class="text-center">
+    <div class="text-6xl mb-3">💳</div>
+    <div class="text-lg font-bold">Connecting...</div>
+    <div class="text-xs text-gray-400 mt-2">Setting up payment device</div>
+  </div>
+</div>
+
+<!-- ERROR -->
+<div id="errorView" class="hide fixed inset-0 flex items-center justify-center p-4 z-[999] bg-gray-900">
+  <div class="text-center max-w-sm">
+    <div class="text-6xl mb-3">⚠️</div>
+    <h1 id="errTitle" class="text-xl font-extrabold text-red-500 mb-2">Session Not Found</h1>
+    <p id="errMsg" class="text-gray-400 text-sm leading-relaxed"></p>
+    <p class="text-gray-500 text-xs mt-6">Generate a new QR from Admin/Salesman Settings and scan again.</p>
+  </div>
+</div>
+
+<!-- ENDED -->
+<div id="endedView" class="hide fixed inset-0 flex items-center justify-center p-4 z-[999] bg-gray-900">
+  <div class="text-center max-w-sm">
+    <div class="text-6xl mb-3">✅</div>
+    <h1 class="text-xl font-extrabold text-green-500 mb-2">Session Ended</h1>
+    <p class="text-gray-400 text-sm">The Admin/Salesman disconnected this payment device.</p>
+  </div>
+</div>
+
+<!-- IDLE -->
+<div id="idleView" class="hide min-h-screen flex flex-col">
+  <header class="bg-gradient-to-r from-blue-600 to-purple-700 p-4 shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="text-4xl">💳</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-lg truncate" id="idleShopName">—</div>
+        <div class="text-[11px] opacity-90">
+          <span id="idleSalesmanName">—</span> · Payment Device
+        </div>
+      </div>
+      <div class="bg-white/20 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+        <span class="inline-block w-2 h-2 rounded-full bg-green-300 mr-1 pulse"></span>LIVE
+      </div>
+    </div>
+  </header>
+
+  <div class="flex-1 flex items-center justify-center p-6 text-center">
+    <div>
+      <div class="text-7xl mb-4">💳</div>
+      <div class="text-2xl font-extrabold mb-2">Payment Device Ready</div>
+      <div class="text-gray-400 text-sm leading-relaxed max-w-xs mx-auto">
+        When the Salesman/Admin creates a UPI payment request, the QR will appear here automatically.
+      </div>
+      <div class="mt-8 inline-flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-full text-xs text-gray-400">
+        <span class="inline-block w-2 h-2 rounded-full bg-green-400 pulse"></span>
+        Waiting for payment request...
+      </div>
+    </div>
+  </div>
+
+  <div class="p-3 text-center text-[11px] text-gray-500 bg-gray-900 border-t border-gray-800">
+    UPI ID: <span id="idleUPI" class="font-mono text-gray-400">—</span>
+  </div>
+</div>
+
+<!-- PAYMENT -->
+<div id="payView" class="hide min-h-screen flex flex-col">
+  <header class="bg-gradient-to-r from-blue-600 to-purple-700 p-3 text-center">
+    <div class="text-xs opacity-90" id="payShopName">—</div>
+    <div class="text-[10px] opacity-75">🔔 New Payment Request</div>
+  </header>
+
+  <div class="flex-1 flex flex-col items-center justify-center p-4 text-center">
+    <div class="text-sm text-gray-400 mb-2">Amount to Pay</div>
+    <div id="payAmount" class="text-5xl font-extrabold text-white mb-1 pop">₹0</div>
+    <div id="payInvoice" class="text-xs text-gray-500 font-mono mb-4"></div>
+
+    <div class="bg-white p-4 rounded-2xl shadow-2xl mb-4 ring-pulse">
+      <img id="payQR" class="block w-[260px] h-[260px]" alt="UPI QR">
+    </div>
+
+    <div class="bg-gray-800 rounded-xl p-3 max-w-sm w-full mb-3">
+      <div class="text-[10px] text-gray-400">UPI ID</div>
+      <div id="payUPI" class="font-mono font-bold text-sm text-white break-all"></div>
+    </div>
+
+    <div class="flex justify-center gap-3 text-[11px] text-gray-400 mb-5">
+      <span>✅ GPay</span><span>✅ PhonePe</span><span>✅ Paytm</span><span>✅ BHIM</span>
+    </div>
+
+    <div class="bg-blue-500/15 border border-blue-400/40 rounded-xl p-3 max-w-sm w-full">
+      <div class="flex items-center justify-center gap-2 text-blue-300 font-semibold text-sm mb-1">
+        <span class="spin">⏳</span>
+        <span>Waiting for confirmation...</span>
+      </div>
+      <div class="text-[11px] text-gray-400">Salesman will confirm the payment from their POS</div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS -->
+<div id="successView" class="hide min-h-screen flex items-center justify-center p-4">
+  <div class="text-center max-w-sm">
+    <div class="text-8xl mb-4 pop">✅</div>
+    <div class="text-3xl font-extrabold text-green-500 mb-2">Payment Successful!</div>
+    <div id="successAmount" class="text-2xl font-bold text-white mb-4">₹0</div>
+    <div class="text-gray-400 text-sm">Confirmed by Salesman's POS</div>
+    <div class="mt-6 inline-flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-full text-xs text-gray-400">
+      <span class="inline-block w-2 h-2 rounded-full bg-green-400 pulse"></span>
+      Waiting for next payment...
+    </div>
+  </div>
+</div>
+
+<!-- CANCELLED -->
+<div id="cancelledView" class="hide min-h-screen flex items-center justify-center p-4">
+  <div class="text-center max-w-sm">
+    <div class="text-8xl mb-4">❌</div>
+    <div class="text-3xl font-extrabold text-red-500 mb-2">Payment Cancelled</div>
+    <div class="text-gray-400 text-sm">The salesman cancelled this payment request</div>
+    <div class="mt-6 inline-flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-full text-xs text-gray-400">
+      <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 pulse"></span>
+      Returning to idle...
+    </div>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="common.js"></script>
+
+<script>
+/* ============================================================
+   PAYMENT DEVICE (IIFE)
+   ============================================================ */
+(function() {
+  'use strict';
+
+  const P = {
+    sessionId: null,
+    session: null,
+    shopId: null,
+    sessionUnsub: null,
+    requestsUnsub: null,
+    activeReqRef: null,
+    activeReqUnsub: null,
+    pingTimer: null,
+    audioCtx: null,
+  };
+
+  const q = s => document.querySelector(s);
+
+  function beep(freq = 900, dur = 120) {
+    try {
+      if (!P.audioCtx) P.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (P.audioCtx.state === 'suspended') P.audioCtx.resume();
+      const osc = P.audioCtx.createOscillator();
+      const gain = P.audioCtx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      osc.connect(gain);
+      gain.connect(P.audioCtx.destination);
+      gain.gain.value = 0.2;
+      osc.start();
+      osc.stop(P.audioCtx.currentTime + dur / 1000);
+    } catch (e) {}
+  }
+
+  function showView(id) {
+    ['loadingView','errorView','endedView','idleView','payView','successView','cancelledView'].forEach(v => {
+      const el = document.getElementById(v);
+      if (el) el.classList.toggle('hide', v !== id);
+    });
+    window.scrollTo({ top: 0 });
+  }
+
+  function showError(title, msg) {
+    q('#errTitle').textContent = title;
+    q('#errMsg').textContent = msg;
+    showView('errorView');
+  }
+
+  (async function init() {
+    const params = new URLSearchParams(location.search);
+    P.sessionId = params.get('s');
+
+    console.log('[payment.html] Session:', P.sessionId);
+    console.log('[payment.html] TP:', typeof TP);
+
+    if (!P.sessionId) {
+      return showError('Missing Session ID', 'No ?s=... parameter. Scan the QR from Admin/Salesman Settings.');
+    }
+
+    if (typeof TP === 'undefined' || !TP.db) {
+      return showError('Firebase Not Loaded', 'Check your internet and refresh.');
+    }
+
+    try {
+      const ref = TP.db.collection('paymentSessions').doc(P.sessionId);
+      const doc = await ref.get();
+
+      if (!doc.exists) {
+        return showError('Session Not Found', 'This session may have expired or been disconnected.');
+      }
+
+      P.session = doc.data();
+      P.shopId = P.session.shopId;
+
+      try {
+        await ref.update({
+          deviceConnected: true,
+          lastPing: TP.FV.serverTimestamp(),
+        });
+      } catch (e) { console.warn('update failed:', e); }
+
+      q('#idleShopName').textContent = P.session.shopName || 'Shop';
+      q('#idleSalesmanName').textContent = P.session.salesmanName || 'Admin';
+      q('#idleUPI').textContent = P.session.upiId || '—';
+
+      showView('idleView');
+
+      P.sessionUnsub = ref.onSnapshot(snap => {
+        if (!snap.exists) {
+          cleanup();
+          showView('endedView');
+        }
+      }, err => console.error('[payment.html] session watch:', err));
+
+      P.requestsUnsub = ref.collection('requests')
+        .where('status', '==', 'pending')
+        .onSnapshot(snap => {
+          snap.docChanges().forEach(change => {
+            if (change.type !== 'added') return;
+            const data = change.doc.data();
+            showPaymentRequest(change.doc.ref, data);
+          });
+        }, err => console.error('[payment.html] requests listener:', err));
+
+      P.pingTimer = setInterval(() => {
+        ref.update({ lastPing: TP.FV.serverTimestamp() }).catch(() => {});
+      }, 30000);
+
+    } catch (e) {
+      console.error('[payment.html] INIT ERROR:', e);
+      const msg = String(e.message || e).substring(0, 180);
+      showError('Connection Error', msg + ' | Check Firestore Rules allow paymentSessions access.');
+    }
+  })();
+
+  async function showPaymentRequest(reqRef, data) {
+    P.activeReqRef = reqRef;
+    const amount = +data.amount || 0;
+
+    q('#payShopName').textContent = P.session.shopName || 'Shop';
+    q('#payAmount').textContent = TP.money(amount);
+    q('#payInvoice').textContent = data.invoiceNo || '';
+    q('#payUPI').textContent = P.session.upiId || '';
+
+    try {
+      const upiURL = TP.buildUPIURL({
+        upiId: P.session.upiId,
+        name: P.session.upiName || P.session.shopName,
+        amount,
+        note: data.invoiceNo || '',
+      });
+      const qr = await TP.generateQRDataURL(upiURL, 600);
+      q('#payQR').src = qr;
+    } catch (e) {
+      console.error('[payment.html] QR error:', e);
+      q('#payQR').src = '';
+    }
+
+    beep(750, 100);
+    try { navigator.vibrate && navigator.vibrate([80, 60, 80]); } catch (e) {}
+
+    showView('payView');
+
+    if (P.activeReqUnsub) { try { P.activeReqUnsub(); } catch(e){} }
+    P.activeReqUnsub = reqRef.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const d = snap.data();
+
+      if (d.status === 'paid') {
+        q('#successAmount').textContent = TP.money(d.amount || amount);
+        beep(1100, 150);
+        try { navigator.vibrate && navigator.vibrate(150); } catch (e) {}
+        showView('successView');
+
+        if (P.activeReqUnsub) { try { P.activeReqUnsub(); } catch(e){} P.activeReqUnsub = null; }
+        P.activeReqRef = null;
+
+        setTimeout(() => {
+          if (!document.getElementById('successView').classList.contains('hide')) {
+            showView('idleView');
+          }
+        }, 2800);
+
+      } else if (d.status === 'cancelled') {
+        beep(400, 200);
+        showView('cancelledView');
+
+        if (P.activeReqUnsub) { try { P.activeReqUnsub(); } catch(e){} P.activeReqUnsub = null; }
+        P.activeReqRef = null;
+
+        setTimeout(() => {
+          if (!document.getElementById('cancelledView').classList.contains('hide')) {
+            showView('idleView');
+          }
+        }, 1800);
+      }
+    }, err => console.error('[payment.html] req watch:', err));
+  }
+
+  function cleanup() {
+    if (P.sessionUnsub) { try { P.sessionUnsub(); } catch (e) {} P.sessionUnsub = null; }
+    if (P.requestsUnsub) { try { P.requestsUnsub(); } catch (e) {} P.requestsUnsub = null; }
+    if (P.activeReqUnsub) { try { P.activeReqUnsub(); } catch (e) {} P.activeReqUnsub = null; }
+    if (P.pingTimer) { clearInterval(P.pingTimer); P.pingTimer = null; }
+  }
+
+  window.addEventListener('beforeunload', cleanup);
+
+})();
+</script>
+</body>
+</html>
