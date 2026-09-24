@@ -6,6 +6,8 @@
 <title>Customer Portal — TextilePOS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
 <style>
   body{ font-family:'Inter',system-ui,sans-serif; margin:0; }
   .hide{ display:none !important; }
@@ -13,6 +15,15 @@
   .fade-in{ animation:fadeIn .25s ease; }
   .spin{ display:inline-block; animation:spin 1s linear infinite; }
   @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  @keyframes pop{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+  .pop{ animation:pop .25s ease; }
+  html.dark body { background: #111827; color: #e5e7eb; }
+  html.dark .bg-white { background: #1f2937 !important; color: #e5e7eb; }
+  html.dark .bg-gray-100 { background: #111827 !important; }
+  html.dark .bg-gray-50 { background: #1a202c !important; }
+  html.dark .text-gray-500 { color: #9ca3af !important; }
+  html.dark .text-gray-700 { color: #e5e7eb !important; }
+  html.dark input { background: #374151 !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -21,23 +32,23 @@
   <div class="text-center my-6">
     <div class="text-5xl mb-2">🧵</div>
     <h1 class="text-2xl font-extrabold text-gray-800">Customer Portal</h1>
-    <p class="text-xs text-gray-500 mt-1" id="headerSub">Login to view your invoices</p>
+    <p class="text-xs text-gray-500 mt-1" id="headerSub">Login with your Help ID</p>
   </div>
 
   <!-- ═══════════════════════════════════════
-       PANEL 1: SHOP ID + PHONE
+       PANEL 1: VERIFY (Help ID + Phone)
        ═══════════════════════════════════════ -->
   <div id="verifyPanel" class="bg-white rounded-2xl p-6 shadow-sm">
     <div class="flex items-center justify-center mb-4">
-      <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🔍</div>
+      <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🆔</div>
     </div>
 
-    <label class="block text-sm font-bold text-gray-700 mb-2 text-center">Verify your identity</label>
-    <p class="text-[11px] text-gray-400 text-center mb-4">Enter the Shop ID (given by the shop) and your phone number</p>
+    <h2 class="text-base font-bold text-gray-700 mb-1 text-center">Verify your identity</h2>
+    <p class="text-[11px] text-gray-400 text-center mb-5">Enter your Help ID and phone number</p>
 
-    <label class="block text-xs font-bold text-gray-600 mb-1">Shop ID</label>
-    <input id="inpShop" placeholder="SHOP-XXXXXX" autocomplete="off"
-      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 font-mono uppercase text-center tracking-wider">
+    <label class="block text-xs font-bold text-gray-600 mb-1">Help ID</label>
+    <input id="inpHelpId" placeholder="C-XXXXXX" autocomplete="off"
+      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 font-mono uppercase text-center tracking-widest text-lg">
 
     <label class="block text-xs font-bold text-gray-600 mb-1">Your phone number</label>
     <input id="inpPhone" type="tel" inputmode="numeric" placeholder="10-digit mobile" autocomplete="off"
@@ -49,8 +60,8 @@
     <p id="verifyErr" class="text-xs text-red-600 mt-3 text-center min-h-[16px]"></p>
 
     <div class="mt-4 pt-4 border-t border-gray-100 text-[10px] text-gray-400 text-center leading-relaxed">
-      ℹ️ Shop ID is printed on your invoice/receipt.<br>
-      If you don't have it, ask the shop.
+      ℹ️ Your Help ID is printed on your invoice/receipt.<br>
+      It looks like <b class="text-blue-600">C-A3K9Q7</b> — ask the shop if you don't have it.
     </div>
   </div>
 
@@ -61,9 +72,9 @@
     <div class="text-center mb-5">
       <div class="text-3xl mb-1">🔐</div>
       <div class="text-sm font-semibold text-gray-700">Identity verified ✓</div>
-      <div id="verifiedShop" class="text-sm font-bold text-blue-600 mt-1 font-mono"></div>
+      <div id="verifiedShop" class="text-sm font-bold text-blue-600 mt-1"></div>
       <div id="verifiedPhone" class="text-xs text-gray-500 font-mono mt-0.5"></div>
-      <p class="text-xs text-gray-500 mt-2">Now choose how to sign in</p>
+      <p class="text-xs text-gray-500 mt-3">Now choose how to sign in</p>
     </div>
 
     <!-- Google Button -->
@@ -118,7 +129,7 @@
     <p id="authErr" class="text-xs text-red-600 mt-3 text-center min-h-[16px]"></p>
 
     <button id="backToVerify" class="w-full mt-4 text-xs text-gray-500 underline">
-      ← Change Shop ID / Phone
+      ← Change Help ID / Phone
     </button>
   </div>
 
@@ -126,22 +137,27 @@
        PANEL 3: DASHBOARD
        ═══════════════════════════════════════ -->
   <div id="dashPanel" class="hide space-y-3 fade-in">
+    <!-- User Card -->
     <div class="bg-white rounded-2xl p-4 shadow-sm">
       <div class="flex items-center gap-3">
-        <div id="userAvatar" class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600">
-          C
-        </div>
+        <div id="userAvatar" class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600">C</div>
         <div class="flex-1 min-w-0">
           <div class="text-xs text-gray-500">Welcome</div>
           <div class="text-lg font-extrabold truncate" id="custName">—</div>
           <div class="text-xs text-gray-500 mt-0.5 truncate" id="shopName">—</div>
         </div>
       </div>
-      <button id="logoutBtn" class="mt-3 w-full text-xs text-red-600 underline">
-        Logout
-      </button>
+      <button id="logoutBtn" class="mt-3 w-full text-xs text-red-600 underline">Logout</button>
     </div>
 
+    <!-- Help ID Big Display -->
+    <div class="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-dashed border-blue-300 rounded-2xl p-4 text-center">
+      <div class="text-[10px] text-blue-700 font-bold mb-1 tracking-wider">YOUR HELP ID</div>
+      <div id="helpIdBig" class="text-2xl font-extrabold text-blue-700 font-mono tracking-widest mb-1">—</div>
+      <div class="text-[10px] text-gray-500">Show this to the shop to use your points or check your account</div>
+    </div>
+
+    <!-- Stats -->
     <div class="grid grid-cols-2 gap-3">
       <div class="bg-white rounded-2xl p-4 shadow-sm">
         <div class="text-[10px] text-gray-500 font-semibold">PENDING DUE</div>
@@ -150,21 +166,28 @@
       <div class="bg-white rounded-2xl p-4 shadow-sm">
         <div class="text-[10px] text-gray-500 font-semibold">LOYALTY POINTS</div>
         <div class="text-xl font-extrabold text-purple-600 mt-1" id="loyaltyPts">0</div>
+        <div class="text-[9px] text-gray-400 mt-0.5">= ₹<span id="pointsValue">0</span></div>
       </div>
     </div>
 
+    <!-- Invoices -->
     <div class="bg-white rounded-2xl p-4 shadow-sm">
       <h3 class="font-bold text-sm mb-3">🧾 Recent Invoices</h3>
-      <div id="invoiceList" class="space-y-2"></div>
+      <div id="invoiceList" class="space-y-2">
+        <div class="text-center text-gray-400 py-4 text-xs">Loading...</div>
+      </div>
     </div>
 
+    <!-- Info -->
     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-[11px] text-gray-600 leading-relaxed">
-      <b class="text-blue-700">ℹ️ Note:</b> This portal shows your purchase history. For payments, contact the shop.
+      <b class="text-blue-700">ℹ️ Note:</b> This portal shows your purchase history. For payments, contact the shop directly.
     </div>
   </div>
 </div>
 
-<!-- Firebase -->
+<!-- ═══════════════════════════════════════
+     Firebase SDKs
+     ═══════════════════════════════════════ -->
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -177,15 +200,25 @@
   const $ = id => document.getElementById(id);
   const allPanels = ['verifyPanel','authPanel','dashPanel'];
   function showPanel(id) {
-    allPanels.forEach(p => $(p).classList.toggle('hide', p !== id));
+    allPanels.forEach(p => {
+      const el = $(p);
+      if (el) el.classList.toggle('hide', p !== id);
+    });
     window.scrollTo({ top: 0 });
   }
 
+  /* ── Date Formatting ── */
   function fmtDate(iso) {
     if (!iso) return '';
     const d = iso.toDate ? iso.toDate() : new Date(iso);
-    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' +
+           d.getFullYear() + ' ' +
+           String(d.getHours()).padStart(2,'0') + ':' +
+           String(d.getMinutes()).padStart(2,'0');
   }
+
+  /* ── Phone Normalize ── */
   function normalizePhone(raw) {
     let p = String(raw || '').replace(/\D/g, '');
     if (p.startsWith('880') && p.length === 13) p = '0' + p.slice(3);
@@ -194,13 +227,15 @@
     return p;
   }
 
-  /* ── Config check ── */
+  /* ── Config Check ── */
   if (!window.FIREBASE_CONFIG) {
     $('verifyErr').textContent = 'firebase-config.js not loaded';
+    $('verifyBtn').disabled = true;
     return;
   }
   if (window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
     $('verifyErr').textContent = 'Firebase config not set';
+    $('verifyBtn').disabled = true;
     return;
   }
 
@@ -209,19 +244,21 @@
   const db = firebase.firestore();
   const auth = firebase.auth();
 
-  // Session data
-  let verified = null; // { shopId, customerId, customer, shop }
+  /* Session data */
+  let verified = null; // { helpId, shopId, customerId, customer, shop }
 
   /* ═══════════════════════════════════════════
-     STEP 1: Verify Shop ID + Phone
+     STEP 1: Verify Help ID + Phone
      ═══════════════════════════════════════════ */
   $('verifyBtn').addEventListener('click', async () => {
-    const shopId = $('inpShop').value.trim().toUpperCase();
+    const helpId = $('inpHelpId').value.trim().toUpperCase();
     const phone = normalizePhone($('inpPhone').value);
     $('verifyErr').textContent = '';
 
-    if (!shopId) { $('verifyErr').textContent = 'Enter Shop ID'; return; }
-    if (!shopId.startsWith('SHOP-')) { $('verifyErr').textContent = 'Shop ID must start with SHOP-'; return; }
+    // Validation
+    if (!helpId) { $('verifyErr').textContent = 'Enter Help ID'; return; }
+    if (!helpId.startsWith('C-')) { $('verifyErr').textContent = 'Help ID must start with C-'; return; }
+    if (helpId.length < 5) { $('verifyErr').textContent = 'Help ID too short'; return; }
     if (!phone || phone.length < 10) { $('verifyErr').textContent = 'Enter valid phone number'; return; }
 
     const btn = $('verifyBtn');
@@ -229,37 +266,50 @@
     btn.innerHTML = '<span class="spin">⏳</span> Verifying...';
 
     try {
-      // 1. Find shop
-      const shopDoc = await db.collection('shops').doc(shopId).get();
+      // 1. Lookup Help ID in customerCodes
+      const codeDoc = await db.collection('customerCodes').doc(helpId).get();
+      if (!codeDoc.exists) {
+        $('verifyErr').textContent = 'Help ID not found — check with the shop';
+        btn.disabled = false; btn.textContent = 'Continue →';
+        return;
+      }
+
+      const codeData = codeDoc.data();
+
+      // 2. Verify phone matches
+      const savedPhone = normalizePhone(codeData.phone || '');
+      if (savedPhone !== phone) {
+        $('verifyErr').textContent = 'Phone does not match this Help ID';
+        btn.disabled = false; btn.textContent = 'Continue →';
+        return;
+      }
+
+      // 3. Fetch shop + customer
+      const shopDoc = await db.collection('shops').doc(codeData.shopId).get();
       if (!shopDoc.exists) {
         $('verifyErr').textContent = 'Shop not found';
         btn.disabled = false; btn.textContent = 'Continue →';
         return;
       }
 
-      // 2. Find customer in that shop by phone
-      const custSnap = await db.collection('shops').doc(shopId)
-        .collection('customers')
-        .where('phone', '==', phone)
-        .limit(1)
-        .get();
-
-      if (custSnap.empty) {
-        $('verifyErr').textContent = 'No customer with this phone in this shop';
+      const custDoc = await db.collection('shops').doc(codeData.shopId)
+        .collection('customers').doc(codeData.customerId).get();
+      if (!custDoc.exists) {
+        $('verifyErr').textContent = 'Customer record not found';
         btn.disabled = false; btn.textContent = 'Continue →';
         return;
       }
 
-      const custDoc = custSnap.docs[0];
       verified = {
-        shopId,
-        customerId: custDoc.id,
+        helpId,
+        shopId: codeData.shopId,
+        customerId: codeData.customerId,
         customer: custDoc.data(),
         shop: shopDoc.data(),
       };
 
       // Fill auth panel
-      $('verifiedShop').textContent = verified.shop.shopName || shopId;
+      $('verifiedShop').textContent = verified.shop.shopName || codeData.shopId;
       $('verifiedPhone').textContent = phone;
 
       showPanel('authPanel');
@@ -273,29 +323,34 @@
     }
   });
 
+  // Auto-format Help ID input (uppercase)
+  $('inpHelpId').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
+  });
+
   /* ═══════════════════════════════════════════
-     TAB SWITCHING
+     TABS
      ═══════════════════════════════════════════ */
-  $('tabLogin').onclick = () => {
+  $('tabLogin').addEventListener('click', () => {
     $('tabLogin').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600';
     $('tabRegister').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500';
     $('emailLoginForm').classList.remove('hide');
     $('emailRegisterForm').classList.add('hide');
     $('authErr').textContent = '';
-  };
-  $('tabRegister').onclick = () => {
+  });
+  $('tabRegister').addEventListener('click', () => {
     $('tabRegister').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600';
     $('tabLogin').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500';
     $('emailRegisterForm').classList.remove('hide');
     $('emailLoginForm').classList.add('hide');
     $('authErr').textContent = '';
-  };
+  });
 
   /* ═══════════════════════════════════════════
      GOOGLE SIGN-IN
      ═══════════════════════════════════════════ */
   $('googleBtn').addEventListener('click', async () => {
-    if (!verified) { $('authErr').textContent = 'Please verify phone first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
     $('authErr').textContent = '';
     const btn = $('googleBtn');
     btn.disabled = true;
@@ -311,6 +366,7 @@
       if (e.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled';
       if (e.code === 'auth/popup-blocked') msg = 'Popup blocked — allow popups and retry';
       if (e.code === 'auth/operation-not-allowed') msg = 'Google sign-in not enabled in Firebase Console';
+      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
       $('authErr').textContent = msg;
       btn.disabled = false;
     }
@@ -321,7 +377,7 @@
      ═══════════════════════════════════════════ */
   $('emailLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!verified) { $('authErr').textContent = 'Please verify phone first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
     $('authErr').textContent = '';
     const email = $('loginEmail').value.trim().toLowerCase();
     const pass = $('loginPass').value;
@@ -336,10 +392,11 @@
     } catch (e) {
       console.error('Login error:', e);
       let msg = 'Login failed';
-      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) {
+      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential','auth/invalid-login-credentials'].includes(e.code)) {
         msg = 'Invalid email or password';
       }
       if (e.code === 'auth/too-many-requests') msg = 'Too many attempts — try later';
+      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
       $('authErr').textContent = msg;
       btn.disabled = false; btn.textContent = 'Login';
     }
@@ -350,7 +407,7 @@
      ═══════════════════════════════════════════ */
   $('emailRegisterForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!verified) { $('authErr').textContent = 'Please verify phone first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
     $('authErr').textContent = '';
     const email = $('regEmail').value.trim().toLowerCase();
     const pass = $('regPass').value;
@@ -371,54 +428,64 @@
       if (e.code === 'auth/email-already-in-use') msg = 'This email is already registered — try Login';
       if (e.code === 'auth/invalid-email') msg = 'Invalid email format';
       if (e.code === 'auth/weak-password') msg = 'Password is too weak';
+      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
       $('authErr').textContent = msg;
       btn.disabled = false; btn.textContent = 'Create Account';
     }
   });
 
   /* ═══════════════════════════════════════════
-     BACK BUTTON
+     BACK TO VERIFY
      ═══════════════════════════════════════════ */
-  $('backToVerify').onclick = async () => {
+  $('backToVerify').addEventListener('click', async () => {
     try { await auth.signOut(); } catch (e) {}
     verified = null;
-    $('inpShop').value = '';
+    $('inpHelpId').value = '';
     $('inpPhone').value = '';
     $('verifyErr').textContent = '';
     $('authErr').textContent = '';
     $('loginEmail').value = ''; $('loginPass').value = '';
     $('regEmail').value = ''; $('regPass').value = ''; $('regPass2').value = '';
     showPanel('verifyPanel');
-  };
+  });
 
   /* ═══════════════════════════════════════════
      AUTH STATE
      ═══════════════════════════════════════════ */
   auth.onAuthStateChanged(async user => {
     if (!user) {
-      showPanel('verifyPanel');
+      // Not signed in
+      if (verified) {
+        // They verified but aren't signed in — show auth panel
+        showPanel('authPanel');
+      } else {
+        showPanel('verifyPanel');
+      }
       return;
     }
 
-    // If not verified in this session, restore from localStorage
+    // Signed in — do we have verify data?
     if (!verified) {
+      // Try to restore from localStorage
       const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
-      if (saved && saved.shopId && saved.phone) {
+      if (saved && saved.helpId && saved.phone) {
         try {
-          const shopDoc = await db.collection('shops').doc(saved.shopId).get();
+          const codeDoc = await db.collection('customerCodes').doc(saved.helpId).get();
+          if (!codeDoc.exists) { await auth.signOut(); return; }
+          const codeData = codeDoc.data();
+
+          const shopDoc = await db.collection('shops').doc(codeData.shopId).get();
           if (!shopDoc.exists) { await auth.signOut(); return; }
 
-          const custSnap = await db.collection('shops').doc(saved.shopId)
-            .collection('customers')
-            .where('phone', '==', saved.phone)
-            .limit(1).get();
-
-          if (custSnap.empty) { await auth.signOut(); return; }
+          const custDoc = await db.collection('shops').doc(codeData.shopId)
+            .collection('customers').doc(codeData.customerId).get();
+          if (!custDoc.exists) { await auth.signOut(); return; }
 
           verified = {
-            shopId: saved.shopId,
-            customerId: custSnap.docs[0].id,
-            customer: custSnap.docs[0].data(),
+            helpId: saved.helpId,
+            shopId: codeData.shopId,
+            customerId: codeData.customerId,
+            customer: custDoc.data(),
             shop: shopDoc.data(),
           };
         } catch (e) {
@@ -427,6 +494,7 @@
           return;
         }
       } else {
+        // Signed in without verification — send to verify
         showPanel('verifyPanel');
         return;
       }
@@ -434,7 +502,7 @@
 
     // Save session for auto-login
     localStorage.setItem('tp_portal_session', JSON.stringify({
-      shopId: verified.shopId,
+      helpId: verified.helpId,
       phone: verified.customer.phone,
       uid: user.uid,
       email: user.email || '',
@@ -444,16 +512,19 @@
   });
 
   /* ═══════════════════════════════════════════
-     LOAD DASHBOARD
+     DASHBOARD
      ═══════════════════════════════════════════ */
   async function loadDashboard(user) {
-    const { shopId, customerId, customer, shop } = verified;
+    const { helpId, shopId, customerId, customer, shop } = verified;
 
     try {
+      // Fill UI
       $('custName').textContent = customer.name || 'Customer';
       $('shopName').textContent = shop.shopName || shopId;
+      $('helpIdBig').textContent = helpId;
       $('dueAmt').textContent = '₹' + Number(customer.due || 0).toFixed(2);
       $('loyaltyPts').textContent = String(customer.loyaltyPoints || 0);
+      $('pointsValue').textContent = String(customer.loyaltyPoints || 0);
       $('userAvatar').textContent = (customer.name || 'C').charAt(0).toUpperCase();
 
       // Load invoices
@@ -465,7 +536,8 @@
           .get();
 
         let sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Sort by date (newest first) manually — no index needed
+
+        // Sort by date (newest first) client-side — no index needed
         sales.sort((a, b) => {
           const da = a.saleDate?.toDate ? a.saleDate.toDate() : new Date(a.saleDate || 0);
           const db_ = b.saleDate?.toDate ? b.saleDate.toDate() : new Date(b.saleDate || 0);
@@ -473,26 +545,31 @@
         });
         sales = sales.slice(0, 20);
 
-        $('invoiceList').innerHTML = sales.length
-          ? sales.map(s => `
+        if (sales.length) {
+          $('invoiceList').innerHTML = sales.map(s => `
             <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2.5 text-xs">
-              <div>
-                <div class="font-semibold font-mono">${s.invoiceNo}</div>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold font-mono truncate">${s.invoiceNo}</div>
                 <div class="text-[10px] text-gray-500">${fmtDate(s.saleDate)}</div>
+                ${s.salesmanName ? `<div class="text-[9px] text-gray-400">${s.salesmanName}</div>` : ''}
               </div>
-              <div class="text-right">
+              <div class="text-right flex-shrink-0 ml-2">
                 <div class="font-bold">₹${Number(s.total||0).toFixed(2)}</div>
                 ${(+s.due||0)>0
                   ? `<div class="text-[10px] text-red-600">Due ₹${Number(s.due).toFixed(2)}</div>`
                   : `<div class="text-[10px] text-green-600">Paid</div>`}
               </div>
-            </div>`).join('')
-          : '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
+            </div>
+          `).join('');
+        } else {
+          $('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
+        }
       } catch (e) {
         console.warn('Invoices failed:', e);
         $('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">Could not load invoices</div>';
       }
 
+      // Logout
       $('logoutBtn').onclick = async () => {
         localStorage.removeItem('tp_portal_session');
         verified = null;
@@ -510,13 +587,13 @@
   }
 
   /* ═══════════════════════════════════════════
-     BOOT
+     BOOT — Restore session on load
      ═══════════════════════════════════════════ */
   (async function boot() {
-    // Prefill saved shop/phone for convenience
+    // Pre-fill Help ID / Phone if saved
     const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
-    if (saved && saved.shopId && saved.phone) {
-      $('inpShop').value = saved.shopId;
+    if (saved && saved.helpId && saved.phone) {
+      $('inpHelpId').value = saved.helpId;
       $('inpPhone').value = saved.phone;
     }
     // onAuthStateChanged will handle showing the right panel
