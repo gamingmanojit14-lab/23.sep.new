@@ -7,7 +7,7 @@
    - Remote Scanner Session
    - Remote Payment Device Session
    - Customer Help ID System
-   - Points Payment Request (QR-based)
+   - Points Payment Request (QR-based, Open Payer supported)
    - WhatsApp helpers
    - Hold/Park Sale
    - Discount Presets
@@ -742,7 +742,17 @@ async function registerCustomerCode(code, shopId, customerId, phone, name, batch
 }
 
 /* ═══════════════════════════════════════════════════════════
-   POINTS PAYMENT REQUEST (QR-based, customer-confirmed)
+   POINTS PAYMENT REQUEST (QR-based, Open Payer supported)
+   
+   TWO MODES:
+   1. openPayer = true  → anyone can scan & pay from their own wallet
+   2. openPayer = false → only the specified customer can pay
+   
+   Flow (open payer):
+   - Salesman creates request → gets requestId
+   - QR = point-pay.html?r=requestId  (payment receive address)
+   - Customer scans → verifies own Help ID + phone
+   - System shows THEIR wallet → they confirm → their points deducted
    ═══════════════════════════════════════════════════════════ */
 function generatePointsRequestId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -751,26 +761,53 @@ function generatePointsRequestId() {
   return s;
 }
 
-async function createPointsRequest({ shopId, customerId, customerName, customerHelpId, customerPhone, availablePoints, billTotal, salesmanId, salesmanName }) {
+async function createPointsRequest({
+  shopId,
+  customerId,
+  customerName,
+  customerHelpId,
+  customerPhone,
+  availablePoints,
+  billTotal,
+  salesmanId,
+  salesmanName,
+  openPayer = false,
+}) {
   const requestId = generatePointsRequestId();
   const maxPointsUsable = Math.min(+availablePoints || 0, +billTotal || 0);
-  await db.collection('pointsRequests').doc(requestId).set({
-    requestId, shopId, customerId, customerName, customerHelpId,
-    customerPhone: customerPhone || '',   // ⭐ নতুন — ফোন ভেরিফিকেশনের জন্য
-    availablePoints: +availablePoints || 0,
+
+  const data = {
+    requestId,
+    shopId,
+    // For open-payer mode, these are null/empty
+    customerId: openPayer ? null : (customerId || null),
+    customerName: openPayer ? '' : (customerName || ''),
+    customerHelpId: openPayer ? '' : (customerHelpId || ''),
+    customerPhone: openPayer ? '' : (customerPhone || ''),
+
+    // Payer info — filled in AFTER verification by whoever pays
+    payerCustomerId: null,
+    payerCustomerName: null,
+    payerPhone: null,
+
+    openPayer: !!openPayer,
+    availablePoints: openPayer ? 0 : (+availablePoints || 0),
     billTotal: +billTotal || 0,
-    maxPointsUsable,
+    maxPointsUsable: openPayer ? (+billTotal || 0) : maxPointsUsable,
     pointsUsed: null,
     status: 'pending',
-    salesmanId, salesmanName,
+    salesmanId,
+    salesmanName,
     createdAt: FV.serverTimestamp(),
     expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  };
+
+  await db.collection('pointsRequests').doc(requestId).set(data);
   return requestId;
 }
 
 function buildPointsPayURL(requestId) {
-  // ⚠️ ফাইলের নাম point-pay.html (points নয়)
+  // ⚠️ Filename is point-pay.html (not points-pay.html)
   const url = new URL('point-pay.html', location.href);
   url.searchParams.set('r', requestId);
   return url.href;
@@ -781,12 +818,18 @@ async function getPointsRequest(requestId) {
   return doc.exists ? { id: doc.id, ...doc.data() } : null;
 }
 
-async function confirmPointsRequest(requestId, pointsUsed) {
-  await db.collection('pointsRequests').doc(requestId).update({
+async function confirmPointsRequest(requestId, pointsUsed, payerInfo) {
+  const update = {
     status: 'confirmed',
     pointsUsed: +pointsUsed || 0,
     confirmedAt: FV.serverTimestamp(),
-  });
+  };
+  if (payerInfo) {
+    update.payerCustomerId = payerInfo.id || null;
+    update.payerCustomerName = payerInfo.name || null;
+    update.payerPhone = payerInfo.phone || null;
+  }
+  await db.collection('pointsRequests').doc(requestId).update(update);
 }
 
 async function cancelPointsRequest(requestId) {
@@ -1006,6 +1049,7 @@ function buildInvoiceMessage(sale, settings) {
   L.push(`Paid: ₹${sale.paid.toFixed(2)}`);
   if (sale.due > 0) L.push(`*Due: ₹${sale.due.toFixed(2)}*`);
   if (sale.pointsUsed > 0) L.push(`⭐ Points used: ${sale.pointsUsed} pts`);
+  if (sale.pointsPaidByName) L.push(`Paid by: ${sale.pointsPaidByName}`);
   L.push('');
   L.push('Thank you! Visit again 🙏');
   return L.join('\n');
@@ -1399,7 +1443,7 @@ window.TP = {
   generateShopId, salesmanEmail,
   // Customer Help ID
   generateCustomerCode, generateUniqueCustomerCode, registerCustomerCode,
-  // Points Payment Request (QR-based)
+  // Points Payment Request (QR-based, Open Payer supported)
   generatePointsRequestId, createPointsRequest, buildPointsPayURL,
   getPointsRequest, confirmPointsRequest, cancelPointsRequest, watchPointsRequest,
   // Remote Scanner
