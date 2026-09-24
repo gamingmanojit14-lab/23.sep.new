@@ -850,7 +850,9 @@ async function completeSale() {
 }
 
 /* ============================================================
-   POINTS PAYMENT MODAL — WAITING & FALLBACK QR
+   POINTS PAYMENT MODAL
+   - Sends request to customer portal + payment device
+   - Backup QR is only shown if NO payment device is connected
    ============================================================ */
 async function openPointsPaymentModal() {
   const cid = (document.getElementById('custSelect')||{}).value || S.custId;
@@ -869,20 +871,23 @@ async function openPointsPaymentModal() {
   }
 
   try {
+    // 1. Create request in Firestore (with customerPhone for identity verification)
     const requestId = await TP.createPointsRequest({
       shopId: S.shopId,
       customerId: c.id,
       customerName: c.name,
       customerHelpId: c.customerCode || '',
+      customerPhone: c.phone || '',
       availablePoints: avail,
       billTotal: total,
       salesmanId: S.profile.uid,
       salesmanName: S.profile.name,
     });
 
-    const payURL = TP.buildPointsPayURL(requestId);
     const maxUsable = Math.min(avail, total);
+    const hasDevice = !!S.paymentSessionId;
 
+    // 2. Show waiting modal
     const old = document.getElementById('_pointsWaitModal');
     if (old) old.remove();
 
@@ -893,7 +898,7 @@ async function openPointsPaymentModal() {
       <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;text-align:center;color:#fff;box-shadow:0 25px 70px rgba(0,0,0,.5)">
         <div style="font-size:48px;margin-bottom:6px">⭐</div>
         <h3 style="font-weight:800;font-size:20px;margin:0 0 4px">Points Payment Sent</h3>
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">Request sent to customer's portal</p>
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">Waiting for customer to confirm</p>
 
         <div style="background:linear-gradient(135deg,#a855f7,#2563eb);color:#fff;border-radius:16px;padding:16px;margin-bottom:14px">
           <div style="font-size:11px;opacity:.85">Customer</div>
@@ -904,13 +909,20 @@ async function openPointsPaymentModal() {
         <div id="_pqrStatus" style="background:#312e81;border:1px solid #6366f1;border-radius:12px;padding:14px;font-size:13px;color:#c7d2fe;font-weight:600">
           <div style="font-size:24px;margin-bottom:6px" class="spin">⏳</div>
           Waiting for customer to confirm...
-          <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400">Customer must have their portal open</div>
+          <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400">
+            ${hasDevice
+              ? '📱 QR is on the payment device — ask customer to scan there'
+              : 'Customer must have their portal open'}
+          </div>
         </div>
 
-        <div style="margin-top:14px;background:#0f172a;border-radius:10px;padding:10px;font-size:10px;color:#64748b;text-align:left;line-height:1.6">
-          <b style="color:#94a3b8">Fallback:</b> If customer's portal isn't open, they can scan QR below.
+        <div style="margin-top:14px;background:#0f172a;border-radius:10px;padding:12px;font-size:11px;color:#94a3b8;text-align:left;line-height:1.7">
+          ${hasDevice
+            ? '📱 <b style="color:#a5b4fc">Payment device connected.</b><br>The QR is displayed on the connected payment device. Ask the customer to scan it with their phone.'
+            : '⚠️ <b style="color:#fbbf24">No payment device connected.</b><br>Use the fallback QR below to let the customer scan.'}
         </div>
 
+        ${hasDevice ? '' : `
         <div id="_pqrFallback" style="margin-top:8px">
           <button id="_showQRBtn" style="width:100%;background:#334155;color:#cbd5e1;border:none;border-radius:10px;padding:10px;font-weight:600;font-size:12px;font-family:inherit;cursor:pointer">
             📱 Show QR (backup)
@@ -921,6 +933,7 @@ async function openPointsPaymentModal() {
             </div>
           </div>
         </div>
+        `}
 
         <button id="_pqrCancel" style="width:100%;background:#7f1d1d;color:#fecaca;padding:13px;border:none;border-radius:12px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;margin-top:14px">
           Cancel Request
@@ -928,24 +941,28 @@ async function openPointsPaymentModal() {
       </div>`;
     document.body.appendChild(modal);
 
-    // Show QR fallback
-    try {
-      const qr = await TP.generateQRDataURL(payURL, 400);
-      document.getElementById('_showQRBtn').onclick = () => {
-        const wrap = document.getElementById('_qrWrap');
-        if (wrap.style.display === 'none') {
-          document.getElementById('_qrImg').src = qr;
-          wrap.style.display = 'block';
-          document.getElementById('_showQRBtn').textContent = '🔽 Hide QR';
-        } else {
-          wrap.style.display = 'none';
-          document.getElementById('_showQRBtn').textContent = '📱 Show QR (backup)';
-        }
-      };
-    } catch (e) {
-      document.getElementById('_showQRBtn').style.display = 'none';
+    // 3. If no payment device, generate QR as fallback
+    if (!hasDevice) {
+      try {
+        const payURL = TP.buildPointsPayURL(requestId);
+        const qr = await TP.generateQRDataURL(payURL, 400);
+        document.getElementById('_showQRBtn').onclick = () => {
+          const wrap = document.getElementById('_qrWrap');
+          if (wrap.style.display === 'none') {
+            document.getElementById('_qrImg').src = qr;
+            wrap.style.display = 'block';
+            document.getElementById('_showQRBtn').textContent = '🔽 Hide QR';
+          } else {
+            wrap.style.display = 'none';
+            document.getElementById('_showQRBtn').textContent = '📱 Show QR (backup)';
+          }
+        };
+      } catch (e) {
+        document.getElementById('_showQRBtn').style.display = 'none';
+      }
     }
 
+    // 4. Watch for customer confirmation
     const unsub = TP.watchPointsRequest(requestId, (d) => {
       if (!d) return;
       const statusEl = document.getElementById('_pqrStatus');
