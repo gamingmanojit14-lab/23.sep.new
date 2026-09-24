@@ -751,11 +751,12 @@ function generatePointsRequestId() {
   return s;
 }
 
-async function createPointsRequest({ shopId, customerId, customerName, customerHelpId, availablePoints, billTotal, salesmanId, salesmanName }) {
+async function createPointsRequest({ shopId, customerId, customerName, customerHelpId, customerPhone, availablePoints, billTotal, salesmanId, salesmanName }) {
   const requestId = generatePointsRequestId();
   const maxPointsUsable = Math.min(+availablePoints || 0, +billTotal || 0);
   await db.collection('pointsRequests').doc(requestId).set({
     requestId, shopId, customerId, customerName, customerHelpId,
+    customerPhone: customerPhone || '',   // ⭐ নতুন — ফোন ভেরিফিকেশনের জন্য
     availablePoints: +availablePoints || 0,
     billTotal: +billTotal || 0,
     maxPointsUsable,
@@ -769,7 +770,8 @@ async function createPointsRequest({ shopId, customerId, customerName, customerH
 }
 
 function buildPointsPayURL(requestId) {
-  const url = new URL('points-pay.html', location.href);
+  // ⚠️ ফাইলের নাম point-pay.html (points নয়)
+  const url = new URL('point-pay.html', location.href);
   url.searchParams.set('r', requestId);
   return url.href;
 }
