@@ -131,6 +131,11 @@
           🔓 Verify &amp; Continue
         </button>
         <p id="verifyErr" class="text-xs text-red-400 mt-3 text-center min-h-[16px]"></p>
+
+        <!-- ⭐ Cache clear button (only visible when identity is cached) -->
+        <button id="clearIdentityBtn" class="hide w-full mt-3 text-[11px] text-slate-500 underline">
+          🗑 Forget saved identity
+        </button>
       </div>
     </div>
   </div>
@@ -302,6 +307,8 @@
   let reqUnsub = null;
   let authHandled = false;
 
+  const IDENTITY_KEY = 'tp_pointpay_identity';
+
   function normalizePhone(raw) {
     let p = String(raw || '').replace(/\D/g, '');
     if (p.startsWith('880') && p.length === 13) p = '0' + p.slice(3);
@@ -331,6 +338,42 @@
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // ⭐ Help ID + Phone cache helpers
+  function loadIdentityCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(IDENTITY_KEY) || 'null');
+      if (cached && cached.helpId && cached.phone) return cached;
+    } catch (e) {}
+    return null;
+  }
+
+  function saveIdentityCache(helpId, phone) {
+    try {
+      localStorage.setItem(IDENTITY_KEY, JSON.stringify({
+        helpId, phone, cachedAt: Date.now(),
+      }));
+    } catch (e) {}
+  }
+
+  function clearIdentityCache() {
+    try { localStorage.removeItem(IDENTITY_KEY); } catch (e) {}
+  }
+
+  function fillIdentityFields() {
+    const cached = loadIdentityCache();
+    if (cached) {
+      if (!document.activeElement || document.activeElement !== $('helpIdInput')) {
+        $('helpIdInput').value = cached.helpId;
+      }
+      if (!document.activeElement || document.activeElement !== $('phoneInput')) {
+        $('phoneInput').value = cached.phone;
+      }
+      $('clearIdentityBtn').classList.remove('hide');
+    } else {
+      $('clearIdentityBtn').classList.add('hide');
+    }
+  }
+
   if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
     setTimeout(() => showError('Config Missing', 'firebase-config.js not set'), 100);
     return;
@@ -344,6 +387,9 @@
   (async function boot() {
     const requestId = new URLSearchParams(location.search).get('r');
     if (!requestId) return showError('Missing Request', 'Please scan a valid QR code');
+
+    // ⭐ Pre-fill cached identity as early as possible
+    fillIdentityFields();
 
     try {
       const doc = await db.collection('pointsRequests').doc(requestId).get();
@@ -422,8 +468,13 @@
 
   function goToVerify() {
     stage = 'verify';
+    fillIdentityFields(); // ⭐ ensure cache is applied
     showView('verifyView');
-    setTimeout(() => $('helpIdInput').focus(), 250);
+    setTimeout(() => {
+      // Focus Help ID if empty, else Phone, else Verify button
+      if (!$('helpIdInput').value) $('helpIdInput').focus();
+      else if (!$('phoneInput').value) $('phoneInput').focus();
+    }, 250);
   }
 
   // ═══════════════════════════════ LOGIN ═══════════════════════════════
@@ -496,6 +547,15 @@
   // ═══════════════════════════════ VERIFY ═══════════════════════════════
   $('helpIdInput').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
 
+  // ⭐ Clear cached identity
+  $('clearIdentityBtn').onclick = () => {
+    clearIdentityCache();
+    $('helpIdInput').value = '';
+    $('phoneInput').value = '';
+    $('clearIdentityBtn').classList.add('hide');
+    $('helpIdInput').focus();
+  };
+
   $('verifyBtn').onclick = async () => {
     const helpId = $('helpIdInput').value.trim().toUpperCase();
     const phone = normalizePhone($('phoneInput').value);
@@ -552,6 +612,25 @@
         loyaltyPoints: loyaltyPoints,
         paymentPin: customer.paymentPin || null,
       };
+
+      // ⭐ Save Help ID + Phone to cache for next time
+      saveIdentityCache(helpId, phone);
+      $('clearIdentityBtn').classList.remove('hide');
+
+      // ⭐ Save Firebase UID → customer mapping (for hardened rules)
+      if (currentUser) {
+        try {
+          await db.collection('customerUsers').doc(currentUser.uid).set({
+            shopId: request.shopId,
+            customerId: payerCustomer.id,
+            helpId: helpId,
+            phone: phone,
+            updatedAt: FV.serverTimestamp(),
+          }, { merge: true });
+        } catch (e) {
+          console.warn('customerUsers mapping failed:', e);
+        }
+      }
 
       btn.disabled = false;
       btn.textContent = '🔓 Verify & Continue';
