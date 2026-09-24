@@ -32,7 +32,6 @@ tailwind.config = { theme: { extend: {
   .pulse{animation:pulse 1.5s infinite}
   @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   .spin{animation:spin 1.2s linear infinite;display:inline-block}
-  /* Dark mode */
   html.dark body { background: #111827 !important; color: #e5e7eb; }
   html.dark .bg-white { background: #1f2937 !important; }
   html.dark .bg-gray-100 { background: #111827 !important; }
@@ -41,7 +40,6 @@ tailwind.config = { theme: { extend: {
   html.dark .text-gray-500, html.dark .text-gray-600 { color: #9ca3af !important; }
   html.dark .border-gray-200, html.dark .border-gray-100 { border-color: #374151 !important; }
   html.dark input, html.dark select, html.dark textarea { background: #374151 !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
-  html.dark .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,.5) !important; }
   html.dark .hover\:bg-gray-50:hover { background: #374151 !important; }
 </style>
 </head>
@@ -180,7 +178,6 @@ const A = {
   currentShiftId: null, currentShift: null,
 };
 
-/* ── MODAL HELPERS ── */
 function openModal(id) { const m = document.getElementById(id); if (m) { m.classList.remove('hide'); m.classList.add('flex'); } }
 function closeModal(id) { const m = document.getElementById(id); if (m) { m.classList.add('hide'); m.classList.remove('flex'); } }
 document.addEventListener('click', e => {
@@ -245,7 +242,6 @@ function renderShell() {
   updateBottomNav();
 }
 
-/* ── LISTENERS ── */
 function setupListeners() {
   const sid = A.shopId;
   const shopRef = TP.db.collection('shops').doc(sid);
@@ -435,7 +431,8 @@ function renderPOS() {
             class="w-full px-4 py-4 rounded-xl border-2 border-dashed border-blue-500 bg-blue-50 focus:border-blue-700 focus:bg-white focus:outline-none text-base font-mono pr-12">
           <div class="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] bg-blue-600 text-white px-2 py-1 rounded font-bold pointer-events-none">SCAN</div>
         </div>
-        <button id="qrScanBtn" class="px-4 rounded-xl bg-blue-600 text-white font-bold text-2xl active:scale-95 transition" title="QR Scan">📱</button>
+        <button id="qrScanBtn" class="px-4 rounded-xl bg-blue-600 text-white font-bold text-2xl active:scale-95 transition" title="Scan Product QR">📱</button>
+        <button id="custQrScanBtn" class="px-4 rounded-xl bg-purple-600 text-white font-bold text-2xl active:scale-95 transition" title="Scan Customer Help ID">👤</button>
       </div>
 
       <input id="posSearch" type="search" placeholder="🔍 Search product..." value="${TP.esc(A.posSearch)}"
@@ -458,6 +455,26 @@ function renderPOS() {
 
   document.getElementById('qrScanBtn').addEventListener('click', () => {
     TP.openQRScanner(code => handleBarcodeScan(String(code).trim()));
+  });
+
+  document.getElementById('custQrScanBtn').addEventListener('click', () => {
+    TP.openQRScanner(async (code) => {
+      const helpId = String(code).trim().toUpperCase();
+      if (!helpId.startsWith('C-')) { TP.toast('Not a valid Help ID', 'error'); return; }
+      try {
+        const codeDoc = await TP.db.collection('customerCodes').doc(helpId).get();
+        if (!codeDoc.exists) { TP.toast('Help ID not found', 'error'); return; }
+        const data = codeDoc.data();
+        const c = A.customers.find(x => x.id === data.customerId);
+        if (!c) { TP.toast('Customer not in list', 'error'); return; }
+        A.custMode = 'existing';
+        A.custId = c.id;
+        if (A.cart.length) {
+          renderCartItems(); renderCartCheckout();
+        }
+        TP.toast(`✓ ${c.name} — ${c.loyaltyPoints || 0} pts`, 'success');
+      } catch (e) { TP.toast(e.message, 'error'); }
+    });
   });
 
   document.getElementById('posSearch').addEventListener('input', e => { A.posSearch = e.target.value; renderProductGrid(); });
@@ -602,6 +619,7 @@ function renderCartCheckout() {
   const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
   const st = A.profile.shop.settings || {};
   const hasUPI = !!st.upiId;
+  const pointsEnabled = TP.isPointsPaymentEnabled(st);
   el.innerHTML = `
     <div class="space-y-3">
       <div>
@@ -640,8 +658,12 @@ function renderCartCheckout() {
           <option value="card">💳 Card</option>
           <option value="bank">🏦 Bank</option>
           <option value="upi" ${hasUPI ? '' : 'disabled'}>💳 UPI QR ${hasUPI ? '' : '(not set)'}</option>
+          <option value="points" ${pointsEnabled ? '' : 'disabled'}>⭐ Points ${pointsEnabled ? '' : '(disabled)'}</option>
           <option value="credit">📝 Credit</option>
         </select></div>
+      <div id="pointsHint" class="hidden text-[11px] bg-purple-50 border border-purple-200 rounded-lg p-2 text-purple-700">
+        ⭐ Select an existing customer to use their points
+      </div>
       <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 space-y-1.5 text-sm border border-blue-100">
         <div class="flex justify-between"><span class="text-gray-600">Subtotal</span><span id="sumSub" class="font-medium">${TP.money(subtotal)}</span></div>
         <div class="flex justify-between"><span class="text-gray-600">Discount</span><span id="sumDisc" class="font-medium text-orange-600">- ${TP.money(0)}</span></div>
@@ -677,6 +699,27 @@ function renderCartCheckout() {
   document.getElementById('paidInput').addEventListener('input', updateSummary);
   document.getElementById('splitPayBtn').addEventListener('click', () => openSplitPaymentModal());
   document.getElementById('checkoutBtn').addEventListener('click', completeSale);
+
+  // Points payment method change handler
+  document.getElementById('payMethod').addEventListener('change', () => {
+    updateSummary();
+    const method = document.getElementById('payMethod').value;
+    if (method === 'points') {
+      const st = A.profile.shop.settings || {};
+      if (!TP.isPointsPaymentEnabled(st)) {
+        TP.toast('Points payment is disabled by admin', 'warn');
+        document.getElementById('payMethod').value = 'cash';
+        return;
+      }
+      if (A.custMode !== 'existing') {
+        TP.toast('Select an existing customer to use points', 'warn');
+        document.getElementById('payMethod').value = 'cash';
+        return;
+      }
+      openPointsPaymentModal();
+    }
+  });
+
   updateSummary();
 }
 
@@ -692,9 +735,12 @@ function renderCmExtra() {
   if (A.custMode === 'existing') {
     el.innerHTML = `<select id="custSelect" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
       <option value="">-- Select customer --</option>
-      ${A.customers.map(c => `<option value="${c.id}">${TP.esc(c.name)}${c.phone?' · '+TP.esc(c.phone):''}${(+c.due||0)>0?' (Due '+TP.money(c.due)+')':''}</option>`).join('')}
+      ${A.customers.map(c => `<option value="${c.id}" ${A.custId===c.id?'selected':''}>${TP.esc(c.name)}${c.phone?' · '+TP.esc(c.phone):''}${(+c.loyaltyPoints||0)>0?' ⭐'+c.loyaltyPoints:''}${(+c.due||0)>0?' (Due '+TP.money(c.due)+')':''}</option>`).join('')}
     </select>`;
-    document.getElementById('custSelect').addEventListener('change', e => A.custId = e.target.value);
+    document.getElementById('custSelect').addEventListener('change', e => {
+      A.custId = e.target.value;
+      updateSummary();
+    });
   } else if (A.custMode === 'new') {
     el.innerHTML = `<div class="space-y-2 fade-in">
       <input id="newCustName" placeholder="Customer name *" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
@@ -717,6 +763,17 @@ function updateSummary() {
   document.getElementById('sumPaid').textContent = TP.money(paid);
   document.getElementById('sumDue').textContent = TP.money(due);
   document.getElementById('sumChange').textContent = TP.money(change);
+
+  const methodSelect = document.getElementById('payMethod');
+  const pointsHint = document.getElementById('pointsHint');
+  if (methodSelect && pointsHint) {
+    const isPoints = methodSelect.value === 'points';
+    if (isPoints && A.custMode !== 'existing') {
+      pointsHint.classList.remove('hidden');
+    } else {
+      pointsHint.classList.add('hidden');
+    }
+  }
 }
 
 async function completeSale() {
@@ -729,6 +786,21 @@ async function completeSale() {
   const due = Math.max(0, total - paid);
   const method = (document.getElementById('payMethod')||{}).value || 'cash';
   const btn = document.getElementById('checkoutBtn');
+
+  // Points Payment handling
+  let pointsUsed = 0;
+  if (method === 'points') {
+    if (A.custMode !== 'existing') { TP.toast('Select existing customer for points payment', 'error'); return; }
+    const cid = (document.getElementById('custSelect')||{}).value || A.custId;
+    const c = A.customers.find(x => x.id === cid);
+    if (!c) { TP.toast('Customer not found', 'error'); return; }
+    const avail = +c.loyaltyPoints || 0;
+    if (avail <= 0) { TP.toast('Customer has no points', 'error'); return; }
+    const maxUsable = Math.min(avail, total);
+    pointsUsed = +window._pointsToRedeem || maxUsable;
+    if (pointsUsed > avail) { TP.toast('Not enough points', 'error'); return; }
+    if (pointsUsed > total) pointsUsed = total;
+  }
 
   let splitPayments = null;
   if (window._splitPayments && window._splitPayments.length) {
@@ -779,61 +851,98 @@ async function completeSale() {
   try {
     const shopRef = TP.db.collection('shops').doc(A.shopId);
     let customerId = null, customerName = 'Walk-in Customer', customerPhone = '';
+    let customerCode = null;
     let newCustomerRef = null;
+
     if (A.custMode === 'existing') {
       const cid = (document.getElementById('custSelect')||{}).value || A.custId;
       if (!cid) throw new Error('Select a customer');
       const c = A.customers.find(x => x.id === cid);
-      if (c) { customerId = c.id; customerName = c.name; customerPhone = c.phone || ''; }
+      if (c) {
+        customerId = c.id; customerName = c.name; customerPhone = c.phone || '';
+        customerCode = c.customerCode || null;
+      }
     } else if (A.custMode === 'new') {
       const name = ((document.getElementById('newCustName')||{}).value || '').trim();
       const phone = ((document.getElementById('newCustPhone')||{}).value || '').trim();
       if (!name) throw new Error('Customer name required');
       newCustomerRef = shopRef.collection('customers').doc();
       customerId = newCustomerRef.id; customerName = name; customerPhone = phone;
+      customerCode = await TP.generateUniqueCustomerCode();
     }
+
     const tk = TP.todayKey();
     const todayInvoices = A.sales.filter(s => (s.invoiceNo||'').includes('-' + tk + '-'));
     const maxSeq = todayInvoices.reduce((m, s) => Math.max(m, parseInt((s.invoiceNo||'').split('-').pop(), 10) || 0), 0);
     const invoiceNo = `INV-${tk}-${String(maxSeq + 1).padStart(4, '0')}`;
+
     const batch = TP.db.batch();
     const saleRef = shopRef.collection('sales').doc();
+
     for (const it of A.cart) {
       const p = A.products.find(x => x.id === it.productId);
       if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty||0) - it.qty });
     }
-    if (newCustomerRef) batch.set(newCustomerRef, { name: customerName, phone: customerPhone, address: '', due: due, loyaltyPoints: 0, createdAt: TP.FV.serverTimestamp() });
-    else if (customerId && due > 0) {
+
+    if (newCustomerRef) {
+      batch.set(newCustomerRef, {
+        name: customerName, phone: customerPhone, address: '',
+        due: due, loyaltyPoints: 0,
+        customerCode: customerCode,
+        createdAt: TP.FV.serverTimestamp(),
+      });
+      TP.registerCustomerCode(customerCode, A.shopId, customerId, customerPhone, customerName, batch);
+    } else if (customerId && due > 0) {
       const c = A.customers.find(x => x.id === customerId);
       if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) + due });
     }
+
     batch.set(saleRef, {
-      invoiceNo, customerId, customerName, customerPhone,
+      invoiceNo, customerId, customerName, customerPhone, customerCode,
       salesmanId: A.profile.uid, salesmanName: A.profile.name,
       type: A.saleType, items: A.cart.map(it => ({...it})),
       subtotal, discount, total, paid, due,
       paymentMethod: method,
       splitPayments: splitPayments,
+      pointsUsed: pointsUsed,
       saleDate: TP.FV.serverTimestamp(),
     });
+
     await batch.commit();
+
     const sale = {
-      id: saleRef.id, invoiceNo, customerId, customerName, customerPhone,
+      id: saleRef.id, invoiceNo, customerId, customerName, customerPhone, customerCode,
       salesmanId: A.profile.uid, salesmanName: A.profile.name,
       type: A.saleType, items: A.cart.map(it => ({...it})),
       subtotal, discount, total, paid, due,
-      paymentMethod: method, splitPayments,
+      paymentMethod: method, splitPayments, pointsUsed,
       saleDate: new Date(),
     };
 
-    // Loyalty points
+    // Deduct used points
+    if (pointsUsed > 0 && customerId) {
+      const c = A.customers.find(x => x.id === customerId);
+      if (c) {
+        const newBal = Math.max(0, (+c.loyaltyPoints || 0) - pointsUsed);
+        await shopRef.collection('customers').doc(c.id).update({ loyaltyPoints: newBal });
+        await shopRef.collection('loyaltyTransactions').add({
+          customerId, customerName,
+          points: -pointsUsed, type: 'redeem',
+          invoiceNo, timestamp: TP.FV.serverTimestamp(),
+        });
+      }
+      window._pointsToRedeem = null;
+    }
+
+    // Earn points (based on total)
     const pointsEarned = TP.calculateLoyaltyEarn(total);
     if (customerId && pointsEarned > 0) {
       try {
         const c = A.customers.find(x => x.id === customerId);
         if (c) {
+          const currentPts = (+c.loyaltyPoints || 0) - pointsUsed;
           await shopRef.collection('customers').doc(c.id).update({
-            loyaltyPoints: (+c.loyaltyPoints || 0) + pointsEarned
+            loyaltyPoints: currentPts + pointsEarned
           });
           await shopRef.collection('loyaltyTransactions').add({
             customerId, customerName, points: pointsEarned, type: 'earn',
@@ -852,10 +961,8 @@ async function completeSale() {
       });
     }
 
-    // Activity log
     TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'SALE', `${invoiceNo} · ₹${total}`);
 
-    // Attendance
     try {
       await shopRef.collection('attendance').add({
         userId: A.profile.uid, userName: A.profile.name, role: 'admin',
@@ -875,7 +982,127 @@ async function completeSale() {
   }
 }
 
-/* ── SPLIT PAYMENT ── */
+/* ── POINTS PAYMENT MODAL ── */
+function openPointsPaymentModal() {
+  const cid = (document.getElementById('custSelect')||{}).value || A.custId;
+  const c = A.customers.find(x => x.id === cid);
+  if (!c) { TP.toast('Select customer first', 'error'); return; }
+
+  const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
+  const discount = +((document.getElementById('discountInput')||{}).value || 0);
+  const total = Math.max(0, subtotal - discount);
+  const avail = +c.loyaltyPoints || 0;
+  const maxUsable = Math.min(avail, total);
+
+  const old = document.getElementById('_pointsModal');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = '_pointsModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:22px;max-width:420px;width:100%;padding:24px">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:44px;margin-bottom:4px">⭐</div>
+        <h3 style="font-weight:800;font-size:18px;margin:0">Pay with Points</h3>
+        <p style="color:#6b7280;font-size:12px;margin:6px 0 0">${TP.esc(c.name)}</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="background:#f0fdf4;border-radius:12px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:#6b7280">Available</div>
+          <div style="font-size:20px;font-weight:800;color:#16a34a">${avail} pts</div>
+          <div style="font-size:10px;color:#9ca3af">= ₹${avail}</div>
+        </div>
+        <div style="background:#eff6ff;border-radius:12px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:#6b7280">Total Bill</div>
+          <div style="font-size:20px;font-weight:800;color:#2563eb">₹${total.toFixed(2)}</div>
+          <div style="font-size:10px;color:#9ca3af">max: ${maxUsable} pts</div>
+        </div>
+      </div>
+
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">Points to redeem</label>
+      <input id="_pointsInput" type="number" min="0" max="${maxUsable}" value="${maxUsable}" style="width:100%;padding:14px;border:2px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:24px;font-weight:800;text-align:center;box-sizing:border-box;margin-bottom:8px">
+
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button data-points-quick="25" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit">25%</button>
+        <button data-points-quick="50" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit">50%</button>
+        <button data-points-quick="75" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit">75%</button>
+        <button data-points-quick="100" style="flex:1;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit">MAX</button>
+      </div>
+
+      <div id="_pointsSummary" style="background:#f9fafb;border-radius:10px;padding:12px;font-size:13px;margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:8px">
+        <button id="_pointsCancel" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:12px;padding:13px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+        <button id="_pointsApply" style="flex:2;background:#16a34a;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">✓ Apply Points</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const input = document.getElementById('_pointsInput');
+  const summary = document.getElementById('_pointsSummary');
+
+  const updateModalSummary = () => {
+    let p = +input.value || 0;
+    if (p < 0) p = 0;
+    if (p > maxUsable) p = maxUsable;
+    input.value = p;
+    const remaining = total - p;
+    const pointsLeft = avail - p;
+    summary.innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="color:#6b7280">Using points</span>
+        <b style="color:#16a34a">${p} pts = ₹${p}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="color:#6b7280">Remaining bill</span>
+        <b style="color:#dc2626">₹${remaining.toFixed(2)}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:4px">
+        <span style="color:#6b7280">Points after</span>
+        <b>${pointsLeft} pts</b>
+      </div>
+    `;
+  };
+  input.addEventListener('input', updateModalSummary);
+  updateModalSummary();
+
+  modal.querySelectorAll('[data-points-quick]').forEach(b => b.addEventListener('click', () => {
+    const pct = +b.dataset.pointsQuick;
+    const p = Math.floor(maxUsable * pct / 100);
+    input.value = p;
+    updateModalSummary();
+  }));
+
+  document.getElementById('_pointsCancel').onclick = () => {
+    window._pointsToRedeem = null;
+    modal.remove();
+    document.getElementById('payMethod').value = 'cash';
+    updateSummary();
+  };
+
+  document.getElementById('_pointsApply').onclick = () => {
+    const p = +input.value || 0;
+    if (p <= 0) { TP.toast('Enter points amount', 'error'); return; }
+    if (p > avail) { TP.toast('Not enough points', 'error'); return; }
+    if (p > total) { TP.toast('Exceeds total', 'error'); return; }
+    window._pointsToRedeem = p;
+    document.getElementById('paidInput').value = p.toFixed(2);
+    modal.remove();
+    updateSummary();
+    TP.toast(`⭐ ${p} points will be applied`, 'success');
+  };
+
+  modal.addEventListener('click', e => { if (e.target === modal) {
+    window._pointsToRedeem = null;
+    modal.remove();
+    document.getElementById('payMethod').value = 'cash';
+    updateSummary();
+  }});
+}
+
+/* ── SPLIT PAYMENT MODAL ── */
 function openSplitPaymentModal() {
   const subtotal = A.cart.reduce((a, it) => a + it.qty * it.price, 0);
   const discount = +((document.getElementById('discountInput')||{}).value || 0);
@@ -1073,7 +1300,7 @@ function showPaymentWaitModal({ reqRef, amount, shopName }) {
 /* ============================================================
    INVOICE
    ============================================================ */
-const payLabel = m => ({ cash:'Cash', bkash:'bKash', card:'Card', bank:'Bank', upi:'UPI', credit:'Credit', split:'Split' }[m] || m);
+const payLabel = m => ({ cash:'Cash', bkash:'bKash', card:'Card', bank:'Bank', upi:'UPI', credit:'Credit', split:'Split', points:'⭐ Points' }[m] || m);
 
 function showInvoice(sale) {
   const st = A.profile.shop.settings || {};
@@ -1101,6 +1328,7 @@ function showInvoice(sale) {
       </div>
       <div class="space-y-1 text-right">
         <p><span class="text-gray-500">Customer:</span> <b>${TP.esc(sale.customerName)}</b></p>
+        ${sale.customerCode ? `<p><span class="text-gray-500">Help ID:</span> <b class="font-mono text-blue-600">${TP.esc(sale.customerCode)}</b></p>` : ''}
         ${sale.customerPhone ? `<p><span class="text-gray-500">Mobile:</span> <b>${TP.esc(sale.customerPhone)}</b></p>` : ''}
         <p><span class="text-gray-500">Type:</span> <b>${sale.type === 'retail' ? 'Retail' : 'Wholesale'}</b></p>
       </div>
@@ -1118,6 +1346,7 @@ function showInvoice(sale) {
       <div class="flex justify-between font-extrabold text-lg border-t-2 border-blue-600 pt-2 text-blue-600"><span>Total</span><span>${TP.money(sale.total)}</span></div>
       <div class="flex justify-between"><span class="text-gray-600">Paid</span><span class="font-medium text-green-600">${TP.money(sale.paid)}</span></div>
       <div class="flex justify-between font-bold text-red-600"><span>Due</span><span>${TP.money(sale.due)}</span></div>
+      ${sale.pointsUsed > 0 ? `<div class="flex justify-between text-purple-600"><span>⭐ Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
     </div>
     <div class="mt-5 flex justify-center">
       <div class="text-center">
@@ -1176,6 +1405,7 @@ function invoiceDoc(sale, format) {
       <p><b>Invoice:</b> ${TP.esc(sale.invoiceNo)}</p>
       <p><b>Date:</b> ${TP.fmtDate(sale.saleDate)}</p>
       <p><b>Customer:</b> ${TP.esc(sale.customerName)}</p>
+      ${sale.customerCode ? `<p><b>Help ID:</b> ${TP.esc(sale.customerCode)}</p>` : ''}
       <p><b>Salesman:</b> ${TP.esc(sale.salesmanName)}</p></div></div>
     <table><thead><tr><th class="c" style="width:30px">#</th><th>Item</th><th class="r" style="width:70px">Qty</th><th class="r" style="width:70px">Price</th><th class="r" style="width:85px">Total</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="totals">
@@ -1185,6 +1415,7 @@ function invoiceDoc(sale, format) {
       <div class="grand"><span>Total</span><span>${TP.money(sale.total)}</span></div>
       <div><span>Paid</span><span>${TP.money(sale.paid)}</span></div>
       <div><span>Due</span><span>${TP.money(sale.due)}</span></div>
+      ${sale.pointsUsed > 0 ? `<div><span>Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
     </div>
     <div class="foot"><p>Payment: ${TP.esc(payLabel(sale.paymentMethod))}</p><p>Thank you! 🙏</p></div>
   </body></html>`;
@@ -1280,7 +1511,7 @@ function renderSales() {
   if (A.salesFilter.salesmanId) list = list.filter(s => s.salesmanId === A.salesFilter.salesmanId);
   if (A.salesFilter.q) {
     const q = A.salesFilter.q.toLowerCase();
-    list = list.filter(s => (s.invoiceNo||'').toLowerCase().includes(q) || (s.customerName||'').toLowerCase().includes(q) || (s.customerPhone||'').includes(q));
+    list = list.filter(s => (s.invoiceNo||'').toLowerCase().includes(q) || (s.customerName||'').toLowerCase().includes(q) || (s.customerPhone||'').includes(q) || (s.customerCode||'').toLowerCase().includes(q));
   }
   const total = list.reduce((a, s) => a + (+s.total || 0), 0);
   const paid = list.reduce((a, s) => a + (+s.paid || 0), 0);
@@ -1305,7 +1536,7 @@ function renderSales() {
         <option value="">All salesmen</option>
         ${A.users.filter(u => u.role === 'salesman').map(u => `<option value="${u.id}" ${A.salesFilter.salesmanId === u.id ? 'selected' : ''}>${TP.esc(u.name)}</option>`).join('')}
       </select>
-      <input id="salesSearch" type="search" placeholder="🔍 Invoice / customer..." value="${TP.esc(A.salesFilter.q)}"
+      <input id="salesSearch" type="search" placeholder="🔍 Invoice / customer / Help ID..." value="${TP.esc(A.salesFilter.q)}"
         class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
       <div class="space-y-2">
         ${list.length ? list.slice(0, 200).map(s => `
@@ -1314,6 +1545,7 @@ function renderSales() {
               <div class="min-w-0 flex-1">
                 <div class="font-semibold text-sm truncate">${TP.esc(s.customerName)}</div>
                 <div class="text-[11px] text-gray-500 font-mono mt-0.5">${TP.esc(s.invoiceNo)}</div>
+                ${s.customerCode ? `<div class="text-[10px] text-blue-600 font-mono">🆔 ${TP.esc(s.customerCode)}</div>` : ''}
                 <div class="text-[11px] text-gray-400 mt-0.5">${TP.fmtDate(s.saleDate)} · ${TP.esc(s.salesmanName)}</div>
               </div>
               <div class="text-right">
@@ -1589,6 +1821,7 @@ function renderCustomers() {
   const el = document.getElementById('page-customers');
   const totalDue = A.customers.reduce((a, c) => a + (+c.due||0), 0);
   const sorted = A.customers.slice().sort((a, b) => (+b.due||0) - (+a.due||0));
+  const noCode = A.customers.filter(c => !c.customerCode).length;
   el.innerHTML = `
     <div class="p-3 space-y-3">
       <div class="bg-gradient-to-br from-red-50 to-orange-50 border border-red-100 rounded-2xl p-4">
@@ -1597,18 +1830,23 @@ function renderCustomers() {
         <div class="text-[11px] text-gray-500 mt-1">${A.customers.filter(c => (+c.due||0) > 0).length} customers</div>
       </div>
       <button id="addCust" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-lg">+ Add Customer</button>
-      <input id="custSearch" type="search" placeholder="🔍 Name / mobile..."
+      ${noCode > 0 ? `<button id="migrateCodesBtn" class="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl font-semibold text-sm">🔄 Generate Missing Help IDs (${noCode})</button>` : ''}
+      <input id="custSearch" type="search" placeholder="🔍 Name / mobile / Help ID..."
         class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-blue-500 focus:outline-none">
       <div id="custList" class="space-y-2"></div>
     </div>`;
   const renderList = (q = '') => {
-    const list = sorted.filter(c => !q || (c.name||'').toLowerCase().includes(q.toLowerCase()) || (c.phone||'').includes(q));
+    const list = sorted.filter(c => !q ||
+      (c.name||'').toLowerCase().includes(q.toLowerCase()) ||
+      (c.phone||'').includes(q) ||
+      (c.customerCode||'').toLowerCase().includes(q.toLowerCase()));
     document.getElementById('custList').innerHTML = list.length ? list.map(c => `
       <div class="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100">
         <div class="flex justify-between items-start gap-2">
           <div class="min-w-0 flex-1">
             <div class="font-semibold text-sm truncate">${TP.esc(c.name)}</div>
             ${c.phone ? `<div class="text-xs text-gray-500 mt-0.5">📞 ${TP.esc(c.phone)}</div>` : ''}
+            ${c.customerCode ? `<div class="text-[10px] text-blue-600 font-mono mt-0.5">🆔 ${TP.esc(c.customerCode)}</div>` : `<div class="text-[10px] text-orange-600 mt-0.5">⚠️ No Help ID</div>`}
             ${c.address ? `<div class="text-[11px] text-gray-400 mt-0.5 truncate">📍 ${TP.esc(c.address)}</div>` : ''}
             ${(+c.loyaltyPoints || 0) > 0 ? `<div class="text-[10px] text-purple-600 font-semibold mt-0.5">⭐ ${c.loyaltyPoints} pts</div>` : ''}
           </div>
@@ -1617,12 +1855,14 @@ function renderCustomers() {
           </div>
         </div>
         <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
-          <button data-cpay="${c.id}" class="flex-1 min-w-[70px] bg-green-50 text-green-700 py-2 rounded-lg text-xs font-semibold">💵 Payment</button>
-          ${(+c.due || 0) > 0 && c.phone ? `<button data-cremind="${c.id}" class="flex-1 min-w-[70px] bg-green-100 text-green-800 py-2 rounded-lg text-xs font-semibold">💬 Remind</button>` : ''}
-          <button data-cedit="${c.id}" class="flex-1 min-w-[70px] bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-semibold">✏️ Edit</button>
+          <button data-cpay="${c.id}" class="flex-1 min-w-[65px] bg-green-50 text-green-700 py-2 rounded-lg text-xs font-semibold">💵 Pay</button>
+          ${(+c.due || 0) > 0 && c.phone ? `<button data-cremind="${c.id}" class="flex-1 min-w-[65px] bg-green-100 text-green-800 py-2 rounded-lg text-xs font-semibold">💬 Remind</button>` : ''}
+          ${c.customerCode ? `<button data-ccopy="${c.id}" class="flex-1 min-w-[65px] bg-blue-100 text-blue-700 py-2 rounded-lg text-xs font-semibold">🆔 Copy ID</button>` : ''}
+          <button data-cedit="${c.id}" class="flex-1 min-w-[65px] bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-semibold">✏️ Edit</button>
           <button data-cdel="${c.id}" class="px-3 bg-red-50 text-red-600 py-2 rounded-lg text-xs font-semibold">🗑</button>
         </div>
       </div>`).join('') : `<div class="bg-white rounded-xl p-8 text-center text-gray-400">No customers yet</div>`;
+
     document.querySelectorAll('[data-cpay]').forEach(b => b.addEventListener('click', () => openPaymentModal(b.dataset.cpay)));
     document.querySelectorAll('[data-cedit]').forEach(b => b.addEventListener('click', () => openCustomerForm(b.dataset.cedit)));
     document.querySelectorAll('[data-cremind]').forEach(b => b.addEventListener('click', () => {
@@ -1630,12 +1870,21 @@ function renderCustomers() {
       if (!c || !c.phone) return;
       TP.openWhatsApp(c.phone, TP.buildDueReminderMessage(c, A.profile.shop.settings || {}));
     }));
+    document.querySelectorAll('[data-ccopy]').forEach(b => b.addEventListener('click', async () => {
+      const c = A.customers.find(x => x.id === b.dataset.ccopy);
+      if (!c || !c.customerCode) return;
+      await TP.copyText(c.customerCode);
+      TP.toast('Help ID copied: ' + c.customerCode, 'success');
+    }));
     document.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => {
       const c = A.customers.find(x => x.id === b.dataset.cdel);
       if (!c) return;
       if (+c.due > 0) { TP.toast('Cannot delete customer with pending due', 'error'); return; }
       if (await TP.askConfirm(`Delete "${c.name}"?`)) {
         await TP.db.collection('shops').doc(A.shopId).collection('customers').doc(c.id).delete();
+        if (c.customerCode) {
+          try { await TP.db.collection('customerCodes').doc(c.customerCode).delete(); } catch (e) {}
+        }
         TP.toast('Deleted', 'success');
       }
     }));
@@ -1643,22 +1892,60 @@ function renderCustomers() {
   renderList();
   document.getElementById('custSearch').addEventListener('input', e => renderList(e.target.value));
   document.getElementById('addCust').addEventListener('click', () => openCustomerForm(null));
+  document.getElementById('migrateCodesBtn')?.addEventListener('click', async () => {
+    const missing = A.customers.filter(c => !c.customerCode);
+    if (!missing.length) { TP.toast('All customers have Help IDs', 'success'); return; }
+    if (!await TP.askConfirm(`Generate Help IDs for ${missing.length} customers?`)) return;
+    let done = 0, failed = 0;
+    for (const c of missing) {
+      try {
+        const code = await TP.generateUniqueCustomerCode();
+        await TP.db.collection('shops').doc(A.shopId).collection('customers').doc(c.id).update({ customerCode: code });
+        await TP.registerCustomerCode(code, A.shopId, c.id, c.phone || '', c.name || '');
+        done++;
+      } catch (e) { console.error(e); failed++; }
+    }
+    TP.toast(`Done: ${done} codes${failed ? `, ${failed} failed` : ''}`, 'success');
+    renderCustomers();
+  });
 }
 
-function openCustomerForm(id) {
+async function openCustomerForm(id) {
   const c = id ? A.customers.find(x => x.id === id) : null;
+  let newCode = null;
+  if (!c) {
+    try { newCode = await TP.generateUniqueCustomerCode(); }
+    catch (e) { TP.toast('Could not generate code', 'error'); return; }
+  }
   openForm(c ? 'Edit Customer' : 'Add Customer',
     [
       { name: 'name', label: 'Name', required: true },
       { name: 'phone', label: 'Mobile', type: 'tel' },
       { name: 'address', label: 'Address', type: 'textarea' },
-    ], c ? { name: c.name, phone: c.phone, address: c.address } : {},
+      { name: 'customerCode', label: '🆔 Help ID', default: c ? (c.customerCode || '') : newCode },
+    ], c ? { name: c.name, phone: c.phone, address: c.address, customerCode: c.customerCode || '' } : { customerCode: newCode },
     async d => {
       const ref = TP.db.collection('shops').doc(A.shopId).collection('customers');
-      const body = { name: d.name.trim(), phone: d.phone.trim(), address: (d.address||'').trim(), due: c ? (+c.due||0) : 0 };
-      if (c) await ref.doc(c.id).update(body);
-      else { body.loyaltyPoints = 0; await ref.add({ ...body, createdAt: TP.FV.serverTimestamp() }); }
-      TP.toast('Saved', 'success');
+      const body = {
+        name: d.name.trim(),
+        phone: d.phone.trim(),
+        address: (d.address||'').trim(),
+        due: c ? (+c.due||0) : 0,
+        customerCode: (d.customerCode||'').trim() || (c ? c.customerCode : newCode),
+      };
+      if (c) {
+        await ref.doc(c.id).update(body);
+        if (body.customerCode) {
+          await TP.registerCustomerCode(body.customerCode, A.shopId, c.id, body.phone, body.name);
+        }
+        TP.toast('Saved', 'success');
+      } else {
+        const newRef = ref.doc();
+        body.loyaltyPoints = 0;
+        await newRef.set({ ...body, createdAt: TP.FV.serverTimestamp() });
+        await TP.registerCustomerCode(body.customerCode, A.shopId, newRef.id, body.phone, body.name);
+        TP.toast('Saved — Help ID: ' + body.customerCode, 'success');
+      }
     });
 }
 
@@ -2369,7 +2656,6 @@ function renderAnalytics() {
   const catList = Object.entries(catMap).sort((a,b) => b[1] - a[1]).slice(0, 8);
   const catMax = Math.max(1, ...catList.map(x => x[1]));
 
-  // Forecast
   const monthly = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
@@ -2436,7 +2722,7 @@ function renderAnalytics() {
           const methods = {};
           A.sales.forEach(s => { methods[s.paymentMethod || 'cash'] = (methods[s.paymentMethod || 'cash'] || 0) + (+s.total || 0); });
           const total = Object.values(methods).reduce((a,b) => a+b, 0) || 1;
-          const colors = { cash:'#16a34a', upi:'#2563eb', bkash:'#dc2626', card:'#7c3aed', bank:'#ea580c', credit:'#f59e0b', split:'#06b6d4' };
+          const colors = { cash:'#16a34a', upi:'#2563eb', bkash:'#dc2626', card:'#7c3aed', bank:'#ea580c', credit:'#f59e0b', split:'#06b6d4', points:'#a855f7' };
           return Object.entries(methods).sort((a,b) => b[1]-a[1]).map(([m, amt]) => `
             <div class="mb-2">
               <div class="flex justify-between text-xs">
@@ -2639,6 +2925,20 @@ function renderSettings() {
       </div>
 
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-3">⭐ Loyalty Points Payment</h3>
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold">Allow points payment</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">Customers can pay using their loyalty points</div>
+          </div>
+          <button id="pointsPaymentToggle" class="px-4 py-1.5 rounded-lg font-semibold text-sm flex-shrink-0 ${s.pointsPaymentEnabled ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'}">
+            ${s.pointsPaymentEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div class="text-[10px] text-gray-400 mt-2">💡 1 point = ₹1</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <h3 class="font-bold mb-2">👤 Account</h3>
         <div class="text-sm space-y-1">
           <div class="flex justify-between"><span class="text-gray-500">Name</span><b>${TP.esc(A.profile.name)}</b></div>
@@ -2695,6 +2995,7 @@ function renderSettings() {
   document.getElementById('copyShopId').addEventListener('click', async () => { await TP.copyText(A.shopId); TP.toast('Copied', 'success'); });
   document.getElementById('saveSettings').addEventListener('click', async () => {
     const settings = {
+      ...(A.profile.shop.settings || {}),
       shopName: document.getElementById('setShopName').value.trim() || A.profile.shop.shopName,
       shopAddress: document.getElementById('setShopAddr').value.trim(),
       shopPhone: document.getElementById('setShopPhone').value.trim(),
@@ -2708,6 +3009,20 @@ function renderSettings() {
       TP.toast('Settings saved', 'success');
     } catch (e) { TP.toast(e.message, 'error'); }
   });
+
+  document.getElementById('pointsPaymentToggle').addEventListener('click', async () => {
+    const current = A.profile.shop.settings || {};
+    const newVal = !current.pointsPaymentEnabled;
+    try {
+      await TP.db.collection('shops').doc(A.shopId).update({
+        'settings.pointsPaymentEnabled': newVal
+      });
+      A.profile.shop.settings = { ...current, pointsPaymentEnabled: newVal };
+      TP.toast('Points payment ' + (newVal ? 'enabled' : 'disabled'), 'success');
+      renderSettings();
+    } catch (e) { TP.toast(e.message, 'error'); }
+  });
+
   document.getElementById('darkToggle').addEventListener('click', () => { TP.toggleDarkMode(); renderSettings(); });
   el.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => TP.setLang(b.dataset.lang)));
   document.getElementById('pwaInstall').addEventListener('click', () => TP.promptPWAInstall());
@@ -2734,9 +3049,9 @@ function renderSettings() {
   });
 }
 
-/* ============================================================
+/* ═══════════════════════════════════════════════
    SCANNER SESSION
-   ============================================================ */
+   ═══════════════════════════════════════════════ */
 function renderScannerSessionBox() {
   const box = document.getElementById('scannerSessionBox');
   if (!box) return;
@@ -2863,9 +3178,9 @@ async function restoreScannerSession() {
   } catch (e) { console.error(e); }
 }
 
-/* ============================================================
+/* ═══════════════════════════════════════════════
    PAYMENT DEVICE
-   ============================================================ */
+   ═══════════════════════════════════════════════ */
 function renderPaymentDeviceBox() {
   const box = document.getElementById('paymentDeviceBox');
   if (!box) return;
