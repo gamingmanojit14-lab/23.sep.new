@@ -293,12 +293,12 @@
         return;
       }
 
-      // ⭐️ [FIX] কাস্টমার ডেটা এখানে ফেচ করা বন্ধ করা হয়েছে (Permission Error এড়াতে)
-      // ডেটা লগইন করার পরে loadDashboard এ ফেচ করা হবে।
+      // ⭐️ customerPhone সেভ করা হচ্ছে — সেশন রিস্টোরের জন্য জরুরি
       verified = {
         helpId,
         shopId: codeData.shopId,
         customerId: codeData.customerId,
+        customerPhone: phone,
         shop: shopDoc.data(),
       };
 
@@ -450,11 +450,11 @@
           const shopDoc = await db.collection('shops').doc(codeData.shopId).get();
           if (!shopDoc.exists) { await auth.signOut(); return; }
 
-          // ⭐️ [FIX] কাস্টমার ডেটা এখানে ফেচ করা বন্ধ করা হয়েছে
           verified = {
             helpId: saved.helpId,
             shopId: codeData.shopId,
             customerId: codeData.customerId,
+            customerPhone: saved.phone,   // ⭐️ সঠিক ফোন নম্বর সেভ করা
             shop: shopDoc.data(),
           };
         } catch (e) {
@@ -469,7 +469,7 @@
 
     localStorage.setItem('tp_portal_session', JSON.stringify({
       helpId: verified.helpId,
-      phone: verified.customer ? verified.customer.phone : verified.shop.phone,
+      phone: verified.customerPhone || (verified.customer ? verified.customer.phone : ''),
       uid: user.uid,
       email: user.email || '',
     }));
@@ -483,7 +483,7 @@
   async function loadDashboard(user) {
     const { helpId, shopId, customerId, shop } = verified;
 
-    // ⭐️ [FIX] কাস্টমার লগইন করার পর এখানে ডেটা ফেচ করা হচ্ছে
+    // কাস্টমার লগইন করার পর এখন ডেটা ফেচ করা হচ্ছে (Security Rules অনুযায়ী)
     let customer;
     try {
       const custDoc = await db.collection('shops').doc(shopId)
@@ -495,7 +495,7 @@
         return;
       }
       customer = custDoc.data();
-      verified.customer = customer; // Store for later use (e.g. session storage)
+      verified.customer = customer;
     } catch (e) {
       console.error("Error fetching customer data:", e);
       alert("Failed to load customer data. Please try again.");
@@ -555,7 +555,7 @@
 
       showPanel('dashPanel');
 
-      // ⭐ START WATCHING FOR POINTS REQUESTS
+      // ⭐ POINTS রিকোয়েস্ট মনিটর করা শুরু
       startPointsWatcher();
 
     } catch (e) {
@@ -566,13 +566,12 @@
 
   /* ═══════════════════════════════════════════
      ⭐ POINTS REQUEST WATCHER
-     Auto-redirect to points-pay.html on new request
+     নতুন রিকোয়েস্ট এলে অটো point-pay.html এ পাঠাবে
      ═══════════════════════════════════════════ */
   function startPointsWatcher() {
     stopPointsWatcher();
     if (!verified) return;
 
-    // Query pending requests for this customer
     pointsWatcher = db.collection('pointsRequests')
       .where('customerId', '==', verified.customerId)
       .limit(20)
@@ -581,24 +580,25 @@
         snap.docChanges().forEach(change => {
           if (change.type !== 'added') return;
           const d = change.doc.data();
+          const docId = change.doc.id;   // ⭐️ আসল ডকুমেন্ট আইডি (requestId)
 
-          // Only handle pending, non-expired, recent requests
+          // শুধু pending, non-expired, recent রিকোয়েস্ট প্রসেস করব
           if (d.status !== 'pending') return;
           if (!d.expiresAt || d.expiresAt < now) return;
           if (d.createdAt && d.createdAt.toDate) {
             const age = now - d.createdAt.toDate().getTime();
-            if (age > 3 * 60 * 1000) return; // older than 3 min — ignore
+            if (age > 3 * 60 * 1000) return; // ৩ মিনিটের পুরনো হলে বাদ
           }
 
-          // Avoid duplicate handling
-          if (lastHandledRequestId === d.requestId) return;
-          lastHandledRequestId = d.requestId;
+          // ডুপ্লিকেট হ্যান্ডলিং এড়াতে
+          if (lastHandledRequestId === docId) return;
+          lastHandledRequestId = docId;
 
-          handlePointsRequest(d);
+          handlePointsRequest(d, docId);
         });
       }, err => {
         console.error('Points watcher error:', err);
-        // Retry after 5s
+        // ৫ সেকেন্ড পর আবার চেষ্টা
         setTimeout(() => { if (verified) startPointsWatcher(); }, 5000);
       });
   }
@@ -607,13 +607,13 @@
     if (pointsWatcher) { try { pointsWatcher(); } catch (e) {} pointsWatcher = null; }
   }
 
-  function handlePointsRequest(d) {
-    console.log('⭐ Points request received:', d);
+  function handlePointsRequest(d, docId) {
+    console.log('⭐ Points request received:', docId, d);
 
-    // Vibrate
+    // ভাইব্রেশন
     try { navigator.vibrate && navigator.vibrate([100, 80, 100, 80, 200]); } catch (e) {}
 
-    // Beep
+    // বিপ সাউন্ড
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
@@ -627,17 +627,17 @@
       osc.stop(ctx.currentTime + 0.15);
     } catch (e) {}
 
-    // Show alert
+    // ফ্লোটিং অ্যালার্ট দেখাও
     const alertEl = $('pointsAlert');
     if (alertEl) {
       alertEl.classList.remove('hidden');
       $('pointsAlertMsg').textContent = `Bill ₹${Number(d.billTotal || 0).toFixed(2)} · Opening...`;
     }
 
-    // Auto-redirect after 800ms
+    // ৮০০ms পর point-pay.html এ রিডাইরেক্ট
     setTimeout(() => {
       const url = new URL('points-pay.html', location.href);
-      url.searchParams.set('r', d.requestId);
+      url.searchParams.set('r', docId);   // ⭐️ docId ব্যবহার করা হচ্ছে
       location.href = url.href;
     }, 800);
   }
@@ -653,7 +653,7 @@
     }
   })();
 
-  // Cleanup on unload
+  // পেজ বন্ধ হলে ক্লিনআপ
   window.addEventListener('beforeunload', () => {
     stopPointsWatcher();
   });
