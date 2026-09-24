@@ -530,7 +530,7 @@ function renderCartCheckout() {
           <option value="credit">📝 Credit</option>
         </select></div>
       <div id="pointsHint" class="hidden text-[11px] bg-purple-50 border border-purple-200 rounded-lg p-2 text-purple-700">
-        ⭐ Select an existing customer to use their points
+        ⭐ Points payment — open payer mode available
       </div>
       <div class="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-4 space-y-1.5 text-sm border border-green-100">
         <div class="flex justify-between"><span class="text-gray-600">Subtotal</span><span id="sumSub" class="font-medium">${TP.money(subtotal)}</span></div>
@@ -575,11 +575,6 @@ function renderCartCheckout() {
       const stt = S.profile.shop.settings || {};
       if (!TP.isPointsPaymentEnabled(stt)) {
         TP.toast('Points payment is disabled by admin', 'warn');
-        document.getElementById('payMethod').value = 'cash';
-        return;
-      }
-      if (S.custMode !== 'existing') {
-        TP.toast('Select an existing customer to use points', 'warn');
         document.getElementById('payMethod').value = 'cash';
         return;
       }
@@ -635,11 +630,8 @@ function updateSummary() {
   const pointsHint = document.getElementById('pointsHint');
   if (methodSelect && pointsHint) {
     const isPoints = methodSelect.value === 'points';
-    if (isPoints && S.custMode !== 'existing') {
-      pointsHint.classList.remove('hidden');
-    } else {
-      pointsHint.classList.add('hidden');
-    }
+    if (isPoints) pointsHint.classList.remove('hidden');
+    else pointsHint.classList.add('hidden');
   }
 }
 
@@ -656,18 +648,22 @@ async function completeSale() {
 
   // Points payment
   let pointsUsed = 0;
+  let payerInfo = null;
   if (method === 'points') {
-    if (S.custMode !== 'existing') { TP.toast('Select existing customer for points', 'error'); return; }
-    const cid = (document.getElementById('custSelect')||{}).value || S.custId;
-    const c = S.customers.find(x => x.id === cid);
-    if (!c) { TP.toast('Customer not found', 'error'); return; }
-    const avail = +c.loyaltyPoints || 0;
-    if (avail <= 0) { TP.toast('Customer has no points', 'error'); return; }
-    const maxUsable = Math.min(avail, total);
     pointsUsed = +window._pointsToRedeem || 0;
     if (pointsUsed <= 0) { TP.toast('Customer has not confirmed points yet', 'error'); return; }
-    if (pointsUsed > avail) { TP.toast('Not enough points', 'error'); return; }
     if (pointsUsed > total) pointsUsed = total;
+    payerInfo = {
+      id: window._pointsPayerId || null,
+      name: window._pointsPayerName || null,
+    };
+    // If specific customer was selected and payer info missing (manual)
+    if (!payerInfo.id && S.custMode === 'existing') {
+      const cid = (document.getElementById('custSelect')||{}).value || S.custId;
+      const c = S.customers.find(x => x.id === cid);
+      if (c) { payerInfo.id = c.id; payerInfo.name = c.name; }
+    }
+    if (!payerInfo.id) { TP.toast('Payer info missing', 'error'); return; }
   }
 
   let splitPayments = null;
@@ -759,7 +755,8 @@ async function completeSale() {
         createdAt: TP.FV.serverTimestamp(),
       });
       TP.registerCustomerCode(customerCode, S.shopId, customerId, customerPhone, customerName, batch);
-    } else if (customerId && due > 0) {
+    } else if (customerId && due > 0 && method !== 'points') {
+      // Only add due to customer if not paid by points
       const c = S.customers.find(x => x.id === customerId);
       if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) + due });
     }
@@ -772,6 +769,8 @@ async function completeSale() {
       paymentMethod: method,
       splitPayments: splitPayments,
       pointsUsed: pointsUsed,
+      pointsPaidBy: payerInfo ? payerInfo.id : null,
+      pointsPaidByName: payerInfo ? payerInfo.name : null,
       saleDate: TP.FV.serverTimestamp(),
     });
 
@@ -783,31 +782,43 @@ async function completeSale() {
       type: S.saleType, items: S.cart.map(it => ({...it})),
       subtotal, discount, total, paid, due,
       paymentMethod: method, splitPayments, pointsUsed,
+      pointsPaidBy: payerInfo ? payerInfo.id : null,
+      pointsPaidByName: payerInfo ? payerInfo.name : null,
       saleDate: new Date(),
     };
 
-    // Deduct used points
-    if (pointsUsed > 0 && customerId) {
-      const c = S.customers.find(x => x.id === customerId);
-      if (c) {
-        const newBal = Math.max(0, (+c.loyaltyPoints || 0) - pointsUsed);
-        await shopRef.collection('customers').doc(c.id).update({ loyaltyPoints: newBal });
-        await shopRef.collection('loyaltyTransactions').add({
-          customerId, customerName,
-          points: -pointsUsed, type: 'redeem',
-          invoiceNo, timestamp: TP.FV.serverTimestamp(),
-        });
-      }
-      window._pointsToRedeem = null;
+    // ⭐ Deduct points from the PAYER's wallet (not the cart customer)
+    if (pointsUsed > 0 && payerInfo && payerInfo.id) {
+      try {
+        const payerDoc = await shopRef.collection('customers').doc(payerInfo.id).get();
+        if (payerDoc.exists) {
+          const payerData = payerDoc.data();
+          const newBal = Math.max(0, (+payerData.loyaltyPoints || 0) - pointsUsed);
+          await shopRef.collection('customers').doc(payerInfo.id).update({ loyaltyPoints: newBal });
+          await shopRef.collection('loyaltyTransactions').add({
+            customerId: payerInfo.id,
+            customerName: payerInfo.name || 'Customer',
+            points: -pointsUsed,
+            type: 'redeem',
+            invoiceNo,
+            paidForCustomerId: customerId !== payerInfo.id ? customerId : null,
+            paidForCustomerName: customerId !== payerInfo.id ? customerName : null,
+            timestamp: TP.FV.serverTimestamp(),
+          });
+        }
+      } catch (e) { console.warn('points deduct:', e); }
     }
+    window._pointsToRedeem = null;
+    window._pointsPayerId = null;
+    window._pointsPayerName = null;
 
-    // Earn points
+    // Earn points on the cart customer (whoever bought)
     const pointsEarned = TP.calculateLoyaltyEarn(total);
     if (customerId && pointsEarned > 0) {
       try {
         const c = S.customers.find(x => x.id === customerId);
         if (c) {
-          const currentPts = (+c.loyaltyPoints || 0) - pointsUsed;
+          const currentPts = (+c.loyaltyPoints || 0);
           await shopRef.collection('customers').doc(c.id).update({
             loyaltyPoints: currentPts + pointsEarned
           });
@@ -850,47 +861,81 @@ async function completeSale() {
 }
 
 /* ============================================================
-   POINTS PAYMENT MODAL
-   - Sends request to customer portal + payment device
-   - Backup QR is only shown if NO payment device is connected
+   POINTS PAYMENT MODAL — OPEN PAYER MODE
+   QR = payment receive address. Whoever scans + verifies pays.
    ============================================================ */
 async function openPointsPaymentModal() {
-  const cid = (document.getElementById('custSelect')||{}).value || S.custId;
-  const c = S.customers.find(x => x.id === cid);
-  if (!c) { TP.toast('Select customer first', 'error'); document.getElementById('payMethod').value = 'cash'; return; }
-
   const subtotal = S.cart.reduce((a, it) => a + it.qty * it.price, 0);
   const discount = +((document.getElementById('discountInput')||{}).value || 0);
   const total = Math.max(0, subtotal - discount);
-  const avail = +c.loyaltyPoints || 0;
 
-  if (avail <= 0) {
-    TP.toast('Customer has no points', 'error');
+  const selectedCid = (document.getElementById('custSelect')||{}).value || S.custId;
+  const selectedCust = selectedCid ? S.customers.find(x => x.id === selectedCid) : null;
+
+  // Mode chooser
+  const old = document.getElementById('_pointsModeModal');
+  if (old) old.remove();
+  const modeModal = document.createElement('div');
+  modeModal.id = '_pointsModeModal';
+  modeModal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.97);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto';
+  modeModal.innerHTML = `
+    <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;color:#fff">
+      <div style="font-size:48px;text-align:center;margin-bottom:6px">⭐</div>
+      <h3 style="font-weight:800;font-size:20px;text-align:center;margin:0 0 6px">Points Payment</h3>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 18px">Bill: ₹${total.toFixed(2)} — choose who will pay</p>
+
+      <button id="_modeOpen" style="width:100%;background:linear-gradient(135deg,#a855f7,#2563eb);color:#fff;border:none;border-radius:14px;padding:16px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:10px;text-align:left">
+        📱 Open — Anyone can pay
+        <div style="font-size:11px;font-weight:400;opacity:.9;margin-top:4px">Show QR. Whoever scans & verifies will pay from their own wallet.</div>
+      </button>
+
+      ${selectedCust ? `
+      <button id="_modeOwn" style="width:100%;background:#334155;color:#e2e8f0;border:none;border-radius:14px;padding:16px;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;text-align:left">
+        👤 Only ${TP.esc(selectedCust.name)} can pay
+        <div style="font-size:11px;font-weight:400;opacity:.75;margin-top:4px">Only this customer's wallet will be charged.</div>
+      </button>` : ''}
+
+      <button id="_modeCancel" style="width:100%;background:transparent;color:#94a3b8;border:none;padding:12px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;margin-top:8px">
+        Cancel
+      </button>
+    </div>`;
+  document.body.appendChild(modeModal);
+
+  document.getElementById('_modeCancel').onclick = () => {
+    modeModal.remove();
     document.getElementById('payMethod').value = 'cash';
-    return;
+  };
+  document.getElementById('_modeOpen').onclick = () => {
+    modeModal.remove();
+    createAndShowPointsModal(total, null, true);
+  };
+  if (selectedCust) {
+    document.getElementById('_modeOwn').onclick = () => {
+      modeModal.remove();
+      createAndShowPointsModal(total, selectedCust, false);
+    };
   }
+}
 
+async function createAndShowPointsModal(total, targetCustomer, openPayer) {
   try {
-    // 1. Create request in Firestore (with customerPhone for identity verification)
     const requestId = await TP.createPointsRequest({
       shopId: S.shopId,
-      customerId: c.id,
-      customerName: c.name,
-      customerHelpId: c.customerCode || '',
-      customerPhone: c.phone || '',
-      availablePoints: avail,
+      customerId: openPayer ? null : targetCustomer.id,
+      customerName: openPayer ? '' : targetCustomer.name,
+      customerHelpId: openPayer ? '' : (targetCustomer.customerCode || ''),
+      customerPhone: openPayer ? '' : (targetCustomer.phone || ''),
+      availablePoints: openPayer ? 0 : (+targetCustomer.loyaltyPoints || 0),
       billTotal: total,
       salesmanId: S.profile.uid,
       salesmanName: S.profile.name,
+      openPayer: openPayer,
     });
 
-    const maxUsable = Math.min(avail, total);
     const hasDevice = !!S.paymentSessionId;
 
-    // 2. Show waiting modal
     const old = document.getElementById('_pointsWaitModal');
     if (old) old.remove();
-
     const modal = document.createElement('div');
     modal.id = '_pointsWaitModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.97);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto';
@@ -898,38 +943,30 @@ async function openPointsPaymentModal() {
       <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;text-align:center;color:#fff;box-shadow:0 25px 70px rgba(0,0,0,.5)">
         <div style="font-size:48px;margin-bottom:6px">⭐</div>
         <h3 style="font-weight:800;font-size:20px;margin:0 0 4px">Points Payment Sent</h3>
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">Waiting for customer to confirm</p>
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">${openPayer ? 'Waiting for any customer to scan & pay' : 'Waiting for ' + TP.esc(targetCustomer.name) + ' to pay'}</p>
 
         <div style="background:linear-gradient(135deg,#a855f7,#2563eb);color:#fff;border-radius:16px;padding:16px;margin-bottom:14px">
-          <div style="font-size:11px;opacity:.85">Customer</div>
-          <div style="font-size:20px;font-weight:800">${TP.esc(c.name)}</div>
-          <div style="font-size:11px;opacity:.85;margin-top:6px">Bill: ₹${total.toFixed(2)} · Max: ${maxUsable} pts</div>
+          <div style="font-size:11px;opacity:.85">Bill</div>
+          <div style="font-size:26px;font-weight:800">₹${total.toFixed(2)}</div>
+          <div style="font-size:11px;opacity:.85;margin-top:6px">${openPayer ? '🔓 Open payer mode' : '👤 ' + TP.esc(targetCustomer.name)}</div>
         </div>
 
         <div id="_pqrStatus" style="background:#312e81;border:1px solid #6366f1;border-radius:12px;padding:14px;font-size:13px;color:#c7d2fe;font-weight:600">
           <div style="font-size:24px;margin-bottom:6px" class="spin">⏳</div>
           Waiting for customer to confirm...
-          <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400">
-            ${hasDevice
-              ? '📱 QR is on the payment device — ask customer to scan there'
-              : 'Customer must have their portal open'}
+          <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400" id="_waitHint">
+            ${hasDevice ? '📱 QR is on the payment device' : 'Use the QR below'}
           </div>
         </div>
 
-        <div style="margin-top:14px;background:#0f172a;border-radius:10px;padding:12px;font-size:11px;color:#94a3b8;text-align:left;line-height:1.7">
-          ${hasDevice
-            ? '📱 <b style="color:#a5b4fc">Payment device connected.</b><br>The QR is displayed on the connected payment device. Ask the customer to scan it with their phone.'
-            : '⚠️ <b style="color:#fbbf24">No payment device connected.</b><br>Use the fallback QR below to let the customer scan.'}
-        </div>
-
         ${hasDevice ? '' : `
-        <div id="_pqrFallback" style="margin-top:8px">
-          <button id="_showQRBtn" style="width:100%;background:#334155;color:#cbd5e1;border:none;border-radius:10px;padding:10px;font-weight:600;font-size:12px;font-family:inherit;cursor:pointer">
-            📱 Show QR (backup)
+        <div style="margin-top:14px">
+          <button id="_showQRBtn" style="width:100%;background:#334155;color:#cbd5e1;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">
+            📱 Show Payment QR
           </button>
           <div id="_qrWrap" style="display:none;margin-top:10px">
             <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block">
-              <img id="_qrImg" style="width:200px;height:200px;display:block">
+              <img id="_qrImg" style="width:220px;height:220px;display:block">
             </div>
           </div>
         </div>
@@ -941,7 +978,6 @@ async function openPointsPaymentModal() {
       </div>`;
     document.body.appendChild(modal);
 
-    // 3. If no payment device, generate QR as fallback
     if (!hasDevice) {
       try {
         const payURL = TP.buildPointsPayURL(requestId);
@@ -954,38 +990,42 @@ async function openPointsPaymentModal() {
             document.getElementById('_showQRBtn').textContent = '🔽 Hide QR';
           } else {
             wrap.style.display = 'none';
-            document.getElementById('_showQRBtn').textContent = '📱 Show QR (backup)';
+            document.getElementById('_showQRBtn').textContent = '📱 Show Payment QR';
           }
         };
+        // Auto-show
+        document.getElementById('_showQRBtn').click();
       } catch (e) {
         document.getElementById('_showQRBtn').style.display = 'none';
       }
     }
 
-    // 4. Watch for customer confirmation
     const unsub = TP.watchPointsRequest(requestId, (d) => {
       if (!d) return;
       const statusEl = document.getElementById('_pqrStatus');
 
       if (d.status === 'confirmed') {
         const result = d.pointsUsed || 0;
+        const payerName = d.payerCustomerName || d.customerName || 'Customer';
         statusEl.style.background = '#14532d';
         statusEl.style.color = '#86efac';
         statusEl.style.borderColor = '#22c55e';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">✅</div>Customer confirmed <b>' + result + ' points</b>!';
+        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">✅</div><b>' + TP.esc(payerName) + '</b> confirmed <b>' + result + ' points</b>!';
         setTimeout(() => {
           try { unsub(); } catch(e){}
           modal.remove();
           window._pointsToRedeem = result;
+          window._pointsPayerId = d.payerCustomerId || d.customerId || null;
+          window._pointsPayerName = payerName;
           document.getElementById('paidInput').value = result.toFixed(2);
           updateSummary();
-          TP.toast('⭐ ' + result + ' points confirmed', 'success');
-        }, 900);
+          TP.toast('⭐ ' + result + ' points confirmed by ' + payerName, 'success');
+        }, 1200);
       } else if (d.status === 'cancelled') {
         statusEl.style.background = '#7f1d1d';
         statusEl.style.color = '#fecaca';
         statusEl.style.borderColor = '#ef4444';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">❌</div>Customer cancelled';
+        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">❌</div>Cancelled';
         setTimeout(() => {
           try { unsub(); } catch(e){}
           modal.remove();
@@ -996,7 +1036,7 @@ async function openPointsPaymentModal() {
         statusEl.style.background = '#78350f';
         statusEl.style.color = '#fde68a';
         statusEl.style.borderColor = '#f59e0b';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">⏰</div>Request expired';
+        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">⏰</div>Expired';
         setTimeout(() => {
           try { unsub(); } catch(e){}
           modal.remove();
@@ -1265,6 +1305,7 @@ function showInvoice(sale) {
       <div class="flex justify-between"><span class="text-gray-600">Paid</span><span class="font-medium text-green-600">${TP.money(sale.paid)}</span></div>
       <div class="flex justify-between font-bold text-red-600"><span>Due</span><span>${TP.money(sale.due)}</span></div>
       ${sale.pointsUsed > 0 ? `<div class="flex justify-between text-purple-600"><span>⭐ Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
+      ${sale.pointsPaidByName ? `<div class="flex justify-between text-purple-600 text-xs"><span>Paid by</span><span>${TP.esc(sale.pointsPaidByName)}</span></div>` : ''}
     </div>
     <div class="mt-5 flex justify-center">
       <div class="text-center">
@@ -1334,6 +1375,7 @@ function invoiceDoc(sale, format) {
       <div><span>Paid</span><span>${TP.money(sale.paid)}</span></div>
       <div><span>Due</span><span>${TP.money(sale.due)}</span></div>
       ${sale.pointsUsed > 0 ? `<div><span>Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
+      ${sale.pointsPaidByName ? `<div><span>Points paid by</span><span>${TP.esc(sale.pointsPaidByName)}</span></div>` : ''}
     </div>
     <div class="foot"><p>Payment: ${TP.esc(payLabel(sale.paymentMethod))}</p><p>Thank you! 🙏</p></div>
   </body></html>`;
@@ -1382,6 +1424,7 @@ function renderMySales() {
                 <div class="font-semibold text-sm truncate">${TP.esc(s.customerName)}</div>
                 <div class="text-[11px] text-gray-500 font-mono mt-0.5">${TP.esc(s.invoiceNo)}</div>
                 ${s.customerCode ? `<div class="text-[10px] text-blue-600 font-mono">🆔 ${TP.esc(s.customerCode)}</div>` : ''}
+                ${s.pointsPaidByName && s.pointsPaidByName !== s.customerName ? `<div class="text-[10px] text-purple-600">⭐ Paid by ${TP.esc(s.pointsPaidByName)}</div>` : ''}
                 <div class="text-[11px] text-gray-400 mt-0.5">${TP.fmtDate(s.saleDate)}</div>
               </div>
               <div class="text-right">
@@ -1549,7 +1592,7 @@ function renderSettings() {
 
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <h3 class="font-bold mb-2">💳 Payment Device</h3>
-        <p class="text-xs text-gray-500 mb-3">Connect a separate phone/tablet to display UPI QR</p>
+        <p class="text-xs text-gray-500 mb-3">Connect a separate phone/tablet to display UPI + Points QR</p>
         <div id="paymentDeviceBox"></div>
       </div>
 
