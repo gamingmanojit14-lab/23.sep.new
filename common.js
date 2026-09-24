@@ -7,12 +7,11 @@
    - Remote Scanner Session
    - Remote Payment Device Session
    - Customer Help ID System
-   - Points Payment Request (QR-based, Open Payer supported)
+   - ⭐ P2P Wallet API Integration (NEW)
    - WhatsApp helpers
    - Hold/Park Sale
    - Discount Presets
    - Split Payment Parser
-   - Loyalty Points + Points Payment
    - Commission Calculator
    - CSV Parser
    - Activity Log
@@ -23,6 +22,10 @@
    - GST Calculator
    - PWA Install
    All user-facing text in English.
+   
+   ⚠️ REMOVED: Local loyalty points system (100=1 point)
+   ⚠️ REMOVED: pointsRequests collection & helpers
+   ✅ ADDED: P2P Wallet external API integration
    ============================================================ */
 
 if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
@@ -742,109 +745,192 @@ async function registerCustomerCode(code, shopId, customerId, phone, name, batch
 }
 
 /* ═══════════════════════════════════════════════════════════
-   POINTS PAYMENT REQUEST (QR-based, Open Payer supported)
+   ⭐ P2P WALLET API INTEGRATION (NEW)
    
-   TWO MODES:
-   1. openPayer = true  → anyone can scan & pay from their own wallet
-   2. openPayer = false → only the specified customer can pay
+   Backend: https://mpointwallwt-1.onrender.com
+   Wallet App: https://gamingmanojit14-lab.github.io/Mpointwallwtap
    
-   Flow (open payer):
-   - Salesman creates request → gets requestId
-   - QR = point-pay.html?r=requestId  (payment receive address)
-   - Customer scans → verifies own Help ID + phone
-   - System shows THEIR wallet → they confirm → their points deducted
+   Flow:
+   - Admin configures Shop ID + Secret Code via admin.html
+   - Salesman POS calls createPaymentRequest → QR shown
+   - Customer pays via Wallet App
+   - Backend writes to shops/{shopId}/walletPayments/{txId}
+   - Salesman onSnapshot listener detects → sale complete
    ═══════════════════════════════════════════════════════════ */
-function generatePointsRequestId() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = 'PR';
-  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
+window.TP = window.TP || {};
 
-async function createPointsRequest({
-  shopId,
-  customerId,
-  customerName,
-  customerHelpId,
-  customerPhone,
-  availablePoints,
-  billTotal,
-  salesmanId,
-  salesmanName,
-  openPayer = false,
-}) {
-  const requestId = generatePointsRequestId();
-  const maxPointsUsable = Math.min(+availablePoints || 0, +billTotal || 0);
+TP.walletAPI = {
+  DEFAULT_BACKEND: 'https://mpointwallwt-1.onrender.com',
+  DEFAULT_WALLET_APP: 'https://gamingmanojit14-lab.github.io/Mpointwallwtap',
 
-  const data = {
-    requestId,
-    shopId,
-    // For open-payer mode, these are null/empty
-    customerId: openPayer ? null : (customerId || null),
-    customerName: openPayer ? '' : (customerName || ''),
-    customerHelpId: openPayer ? '' : (customerHelpId || ''),
-    customerPhone: openPayer ? '' : (customerPhone || ''),
+  // ─────────────────────────────────────────────────────────
+  // Internal: fetch wrapper with error handling
+  // ─────────────────────────────────────────────────────────
+  async _fetch(backendUrl, path, { method = 'POST', shopId, secretCode, body } = {}) {
+    if (!backendUrl) throw new Error('Backend URL missing');
+    if (!shopId) throw new Error('Shop ID missing');
+    if (!secretCode) throw new Error('Secret code missing');
 
-    // Payer info — filled in AFTER verification by whoever pays
-    payerCustomerId: null,
-    payerCustomerName: null,
-    payerPhone: null,
+    const url = backendUrl.replace(/\/$/, '') + path;
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': secretCode,
+        'x-shop-id': shopId,
+      },
+      body: method === 'GET' ? undefined : JSON.stringify(body || {}),
+    });
 
-    openPayer: !!openPayer,
-    availablePoints: openPayer ? 0 : (+availablePoints || 0),
-    billTotal: +billTotal || 0,
-    maxPointsUsable: openPayer ? (+billTotal || 0) : maxPointsUsable,
-    pointsUsed: null,
-    status: 'pending',
-    salesmanId,
-    salesmanName,
-    createdAt: FV.serverTimestamp(),
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  };
+    let data;
+    try { data = await res.json(); }
+    catch (e) { throw new Error('Invalid response from server'); }
 
-  await db.collection('pointsRequests').doc(requestId).set(data);
-  return requestId;
-}
+    if (!res.ok || data.success === false) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    return data;
+  },
 
-function buildPointsPayURL(requestId) {
-  // ⚠️ Filename is point-pay.html (not points-pay.html)
-  const url = new URL('point-pay.html', location.href);
-  url.searchParams.set('r', requestId);
-  return url.href;
-}
+  // ─────────────────────────────────────────────────────────
+  // Config: read/write from shops/{shopId}/integrationConfig/p2p
+  // ─────────────────────────────────────────────────────────
+  async getConfig(shopId) {
+    try {
+      const doc = await db.collection('shops').doc(shopId)
+        .collection('integrationConfig').doc('p2p').get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (e) {
+      console.warn('getConfig error:', e);
+      return null;
+    }
+  },
 
-async function getPointsRequest(requestId) {
-  const doc = await db.collection('pointsRequests').doc(requestId).get();
-  return doc.exists ? { id: doc.id, ...doc.data() } : null;
-}
+  async saveConfig(shopId, config) {
+    const doc = db.collection('shops').doc(shopId)
+      .collection('integrationConfig').doc('p2p');
+    await doc.set({
+      ...config,
+      updatedAt: FV.serverTimestamp(),
+    }, { merge: true });
+    return true;
+  },
 
-async function confirmPointsRequest(requestId, pointsUsed, payerInfo) {
-  const update = {
-    status: 'confirmed',
-    pointsUsed: +pointsUsed || 0,
-    confirmedAt: FV.serverTimestamp(),
-  };
-  if (payerInfo) {
-    update.payerCustomerId = payerInfo.id || null;
-    update.payerCustomerName = payerInfo.name || null;
-    update.payerPhone = payerInfo.phone || null;
+  async clearConfig(shopId) {
+    await db.collection('shops').doc(shopId)
+      .collection('integrationConfig').doc('p2p').delete();
+    return true;
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Test connection
+  // ─────────────────────────────────────────────────────────
+  async verifyConnection(backendUrl, shopId, secretCode) {
+    return await this._fetch(backendUrl, '/api/verifyConnection', {
+      method: 'POST', shopId, secretCode, body: {},
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Create payment request (returns QR URL)
+  // ─────────────────────────────────────────────────────────
+  async createPaymentRequest(backendUrl, shopId, secretCode, { amount, invoiceNo, expiresIn = 300 }) {
+    return await this._fetch(backendUrl, '/api/createPaymentRequest', {
+      method: 'POST', shopId, secretCode,
+      body: { amount, invoiceNo, expiresIn },
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Poll payment status
+  // ─────────────────────────────────────────────────────────
+  async getPaymentStatus(backendUrl, shopId, secretCode, requestId) {
+    return await this._fetch(
+      backendUrl,
+      `/api/paymentStatus?requestId=${encodeURIComponent(requestId)}`,
+      { method: 'GET', shopId, secretCode }
+    );
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Manual debit (fallback)
+  // ─────────────────────────────────────────────────────────
+  async debitPoints(backendUrl, shopId, secretCode, { customerWalletId, amount, externalRef, note }) {
+    return await this._fetch(backendUrl, '/api/debitPoints', {
+      method: 'POST', shopId, secretCode,
+      body: { customerWalletId, amount, externalRef, note },
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Credit loyalty points to customer wallet
+  // ─────────────────────────────────────────────────────────
+  async creditPoints(backendUrl, shopId, secretCode, { customerWalletId, amount, externalRef, note }) {
+    return await this._fetch(backendUrl, '/api/creditPoints', {
+      method: 'POST', shopId, secretCode,
+      body: { customerWalletId, amount, externalRef, note },
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Get wallet balance
+  // ─────────────────────────────────────────────────────────
+  async getBalance(backendUrl, shopId, secretCode, walletId) {
+    return await this._fetch(
+      backendUrl,
+      `/api/getBalance?walletId=${encodeURIComponent(walletId)}`,
+      { method: 'GET', shopId, secretCode }
+    );
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Listen for incoming payments via Firestore mirror
+  // Backend writes to shops/{shopId}/walletPayments/{txId}
+  // ─────────────────────────────────────────────────────────
+  listenForPayments(shopId, requestId, callback) {
+    const ref = db.collection('shops').doc(shopId)
+      .collection('walletPayments')
+      .where('requestId', '==', requestId)
+      .limit(1);
+
+    let fired = false;
+    return ref.onSnapshot(snap => {
+      if (snap.empty) return;
+      if (fired) return;
+      fired = true;
+      const doc = snap.docs[0];
+      callback({ id: doc.id, ...doc.data() });
+    }, err => {
+      console.error('listenForPayments error:', err);
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Helper: extract walletId from customer doc
+  // ─────────────────────────────────────────────────────────
+  async getCustomerWalletId(shopId, customerId) {
+    if (!customerId) return null;
+    try {
+      const doc = await db.collection('shops').doc(shopId)
+        .collection('customers').doc(customerId).get();
+      if (!doc.exists) return null;
+      return doc.data().walletId || null;
+    } catch (e) { return null; }
+  },
+};
+
+// In-memory config cache
+TP._p2pConfigCache = null;
+TP.getP2PConfig = async function(shopId) {
+  if (TP._p2pConfigCache && TP._p2pConfigCache.shopId === shopId) {
+    return TP._p2pConfigCache;
   }
-  await db.collection('pointsRequests').doc(requestId).update(update);
-}
-
-async function cancelPointsRequest(requestId) {
-  await db.collection('pointsRequests').doc(requestId).update({
-    status: 'cancelled',
-    cancelledAt: FV.serverTimestamp(),
-  });
-}
-
-function watchPointsRequest(requestId, onChange) {
-  return db.collection('pointsRequests').doc(requestId).onSnapshot(snap => {
-    if (!snap.exists) { onChange(null); return; }
-    onChange({ id: snap.id, ...snap.data() });
-  });
-}
+  const cfg = await TP.walletAPI.getConfig(shopId);
+  if (cfg) TP._p2pConfigCache = { shopId, ...cfg };
+  return cfg;
+};
+TP.invalidateP2PConfig = function() { TP._p2pConfigCache = null; };
 
 /* ═══════════════════════════════════════════════════════════
    SCANNER SESSION
@@ -886,7 +972,7 @@ async function deleteScannerSession(sessionId) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PAYMENT SESSION
+   PAYMENT SESSION (Remote UPI Device)
    ═══════════════════════════════════════════════════════════ */
 async function createPaymentSession(shopId, salesmanId, salesmanName, shopName, upiId, upiName) {
   const sessionId = generateSessionId();
@@ -1048,8 +1134,6 @@ function buildInvoiceMessage(sale, settings) {
   L.push(`*Total: ₹${sale.total.toFixed(2)}*`);
   L.push(`Paid: ₹${sale.paid.toFixed(2)}`);
   if (sale.due > 0) L.push(`*Due: ₹${sale.due.toFixed(2)}*`);
-  if (sale.pointsUsed > 0) L.push(`⭐ Points used: ${sale.pointsUsed} pts`);
-  if (sale.pointsPaidByName) L.push(`Paid by: ${sale.pointsPaidByName}`);
   L.push('');
   L.push('Thank you! Visit again 🙏');
   return L.join('\n');
@@ -1118,23 +1202,11 @@ function parseSplitPayments(str, total) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   LOYALTY & COMMISSION
+   COMMISSION CALCULATOR
+   ⚠️ Loyalty earn (100=1 point) REMOVED — handled by P2P Wallet now
    ═══════════════════════════════════════════════════════════ */
-const LOYALTY_EARN_PER = 100;
-const LOYALTY_REDEEM_VALUE = 1;
-const POINTS_TO_RUPEES = 1;
-
-function calculateLoyaltyEarn(amount) {
-  return Math.floor(Number(amount || 0) / LOYALTY_EARN_PER);
-}
 function calculateCommission(total, ratePercent) {
   return Math.round(Number(total || 0) * Number(ratePercent || 0)) / 100;
-}
-function pointsToMoney(points) {
-  return Number(points || 0) * POINTS_TO_RUPEES;
-}
-function isPointsPaymentEnabled(settings) {
-  return settings && settings.pointsPaymentEnabled === true;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1443,12 +1515,13 @@ window.TP = {
   generateShopId, salesmanEmail,
   // Customer Help ID
   generateCustomerCode, generateUniqueCustomerCode, registerCustomerCode,
-  // Points Payment Request (QR-based, Open Payer supported)
-  generatePointsRequestId, createPointsRequest, buildPointsPayURL,
-  getPointsRequest, confirmPointsRequest, cancelPointsRequest, watchPointsRequest,
+  // ⭐ P2P Wallet API Integration
+  walletAPI: TP.walletAPI,
+  getP2PConfig: TP.getP2PConfig,
+  invalidateP2PConfig: TP.invalidateP2PConfig,
   // Remote Scanner
   generateSessionId, buildScannerURL, createScannerSession, deleteScannerSession,
-  // Remote Payment
+  // Remote Payment (UPI device)
   createPaymentSession, buildPaymentURL, deletePaymentSession,
   createPaymentRequest, confirmPaymentRequest, cancelPaymentRequest,
   // UPI
@@ -1458,10 +1531,8 @@ window.TP = {
   // Hold / Discount / Split
   getHeldCarts, saveHeldCarts, holdCart, deleteHeldCart,
   applyDiscountPreset, parseSplitPayments,
-  // Loyalty / Commission
-  calculateLoyaltyEarn, calculateCommission, LOYALTY_EARN_PER, LOYALTY_REDEEM_VALUE,
-  // Points Payment Helpers
-  pointsToMoney, isPointsPaymentEnabled, POINTS_TO_RUPEES,
+  // Commission (loyalty removed)
+  calculateCommission,
   // CSV / Log / Label
   parseCSV, logActivity, printLabelSheet,
   // Appearance / i18n
