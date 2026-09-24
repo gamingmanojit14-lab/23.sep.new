@@ -7,7 +7,8 @@
    - Remote Scanner Session
    - Remote Payment Device Session
    - Customer Help ID System
-   - ⭐ P2P Wallet API Integration (NEW)
+   - ⭐ P2P Wallet API Integration
+   - 🎁 Loyalty Points Calculator (Configurable)
    - WhatsApp helpers
    - Hold/Park Sale
    - Discount Presets
@@ -21,11 +22,6 @@
    - AI Sales Forecast
    - GST Calculator
    - PWA Install
-   All user-facing text in English.
-   
-   ⚠️ REMOVED: Local loyalty points system (100=1 point)
-   ⚠️ REMOVED: pointsRequests collection & helpers
-   ✅ ADDED: P2P Wallet external API integration
    ============================================================ */
 
 if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
@@ -745,17 +741,10 @@ async function registerCustomerCode(code, shopId, customerId, phone, name, batch
 }
 
 /* ═══════════════════════════════════════════════════════════
-   ⭐ P2P WALLET API INTEGRATION (NEW)
+   ⭐ P2P WALLET API INTEGRATION
    
    Backend: https://mpointwallwt-1.onrender.com
    Wallet App: https://gamingmanojit14-lab.github.io/Mpointwallwtap
-   
-   Flow:
-   - Admin configures Shop ID + Secret Code via admin.html
-   - Salesman POS calls createPaymentRequest → QR shown
-   - Customer pays via Wallet App
-   - Backend writes to shops/{shopId}/walletPayments/{txId}
-   - Salesman onSnapshot listener detects → sale complete
    ═══════════════════════════════════════════════════════════ */
 window.TP = window.TP || {};
 
@@ -763,9 +752,6 @@ TP.walletAPI = {
   DEFAULT_BACKEND: 'https://mpointwallwt-1.onrender.com',
   DEFAULT_WALLET_APP: 'https://gamingmanojit14-lab.github.io/Mpointwallwtap',
 
-  // ─────────────────────────────────────────────────────────
-  // Internal: fetch wrapper with error handling
-  // ─────────────────────────────────────────────────────────
   async _fetch(backendUrl, path, { method = 'POST', shopId, secretCode, body } = {}) {
     if (!backendUrl) throw new Error('Backend URL missing');
     if (!shopId) throw new Error('Shop ID missing');
@@ -792,9 +778,6 @@ TP.walletAPI = {
     return data;
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Config: read/write from shops/{shopId}/integrationConfig/p2p
-  // ─────────────────────────────────────────────────────────
   async getConfig(shopId) {
     try {
       const doc = await db.collection('shops').doc(shopId)
@@ -823,18 +806,12 @@ TP.walletAPI = {
     return true;
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Test connection
-  // ─────────────────────────────────────────────────────────
   async verifyConnection(backendUrl, shopId, secretCode) {
     return await this._fetch(backendUrl, '/api/verifyConnection', {
       method: 'POST', shopId, secretCode, body: {},
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Create payment request (returns QR URL)
-  // ─────────────────────────────────────────────────────────
   async createPaymentRequest(backendUrl, shopId, secretCode, { amount, invoiceNo, expiresIn = 300 }) {
     return await this._fetch(backendUrl, '/api/createPaymentRequest', {
       method: 'POST', shopId, secretCode,
@@ -842,9 +819,6 @@ TP.walletAPI = {
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Poll payment status
-  // ─────────────────────────────────────────────────────────
   async getPaymentStatus(backendUrl, shopId, secretCode, requestId) {
     return await this._fetch(
       backendUrl,
@@ -853,9 +827,6 @@ TP.walletAPI = {
     );
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Manual debit (fallback)
-  // ─────────────────────────────────────────────────────────
   async debitPoints(backendUrl, shopId, secretCode, { customerWalletId, amount, externalRef, note }) {
     return await this._fetch(backendUrl, '/api/debitPoints', {
       method: 'POST', shopId, secretCode,
@@ -863,9 +834,6 @@ TP.walletAPI = {
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Credit loyalty points to customer wallet
-  // ─────────────────────────────────────────────────────────
   async creditPoints(backendUrl, shopId, secretCode, { customerWalletId, amount, externalRef, note }) {
     return await this._fetch(backendUrl, '/api/creditPoints', {
       method: 'POST', shopId, secretCode,
@@ -873,9 +841,6 @@ TP.walletAPI = {
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Get wallet balance
-  // ─────────────────────────────────────────────────────────
   async getBalance(backendUrl, shopId, secretCode, walletId) {
     return await this._fetch(
       backendUrl,
@@ -884,10 +849,6 @@ TP.walletAPI = {
     );
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Listen for incoming payments via Firestore mirror
-  // Backend writes to shops/{shopId}/walletPayments/{txId}
-  // ─────────────────────────────────────────────────────────
   listenForPayments(shopId, requestId, callback) {
     const ref = db.collection('shops').doc(shopId)
       .collection('walletPayments')
@@ -906,9 +867,6 @@ TP.walletAPI = {
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Helper: extract walletId from customer doc
-  // ─────────────────────────────────────────────────────────
   async getCustomerWalletId(shopId, customerId) {
     if (!customerId) return null;
     try {
@@ -931,6 +889,87 @@ TP.getP2PConfig = async function(shopId) {
   return cfg;
 };
 TP.invalidateP2PConfig = function() { TP._p2pConfigCache = null; };
+
+/* ═══════════════════════════════════════════════════════════
+   🎁 LOYALTY POINTS CALCULATOR (CONFIGURABLE)
+   
+   Three modes:
+   1. 'percentage' — bill × X% = points
+   2. 'flat'       — spend ₹X → get Y points (scaled)
+   3. 'tier'       — based on tier ranges
+   
+   Plus: min bill check, bonus multiplier, max cap
+   
+   Returns: { points, reason } — reason is short explanation
+   ═══════════════════════════════════════════════════════════ */
+function calculateLoyaltyPoints(config, billTotal) {
+  const bill = Number(billTotal) || 0;
+  const result = { points: 0, reason: '' };
+
+  if (!config) return result;
+  if (!config.loyaltyEnabled) { result.reason = 'Loyalty disabled'; return result; }
+  if (bill <= 0) { result.reason = 'No bill'; return result; }
+
+  // Minimum bill check
+  const minBill = Number(config.loyaltyMinBill) || 0;
+  if (bill < minBill) {
+    result.reason = `Bill below minimum (₹${minBill})`;
+    return result;
+  }
+
+  const mode = config.loyaltyMode || 'percentage';
+  let points = 0;
+
+  if (mode === 'percentage') {
+    // Simple: X% of bill = points
+    const pct = Number(config.loyaltyPercent) || 0;
+    points = Math.floor(bill * pct / 100);
+    result.reason = `${pct}% of ₹${bill}`;
+
+  } else if (mode === 'flat') {
+    // Flat: spend X → get Y points, scaled
+    const flat = config.loyaltyFlat || { spend: 100, points: 5 };
+    const spend = Number(flat.spend) || 100;
+    const pts = Number(flat.points) || 1;
+    const times = Math.floor(bill / spend);
+    points = times * pts;
+    result.reason = `₹${spend} = ${pts}pts × ${times}`;
+
+  } else if (mode === 'tier') {
+    // Tier-based: find matching tier
+    const tiers = (config.loyaltyTiers || []).slice().sort((a, b) => a.minSpend - b.minSpend);
+    for (const tier of tiers) {
+      const min = Number(tier.minSpend) || 0;
+      const max = Number(tier.maxSpend) || Infinity;
+      if (bill >= min && bill <= max) {
+        points = Number(tier.points) || 0;
+        result.reason = `Tier ₹${min}-${max === Infinity ? '+' : max} = ${points}pts`;
+        break;
+      }
+    }
+    if (points === 0) result.reason = 'No matching tier';
+  }
+
+  // Bonus multiplier
+  const bonus = Number(config.loyaltyBonusToday) || 0;
+  if (bonus > 0 && points > 0) {
+    points = points * bonus;
+    result.reason += ` × ${bonus}x bonus`;
+  }
+
+  // Cap
+  const cap = Number(config.loyaltyMaxPoints) || 0;
+  if (cap > 0 && points > cap) {
+    points = cap;
+    result.reason += ` (capped at ${cap})`;
+  }
+
+  points = Math.max(0, Math.floor(points));
+  result.points = points;
+  return result;
+}
+
+TP.calculateLoyaltyPoints = calculateLoyaltyPoints;
 
 /* ═══════════════════════════════════════════════════════════
    SCANNER SESSION
@@ -1203,7 +1242,6 @@ function parseSplitPayments(str, total) {
 
 /* ═══════════════════════════════════════════════════════════
    COMMISSION CALCULATOR
-   ⚠️ Loyalty earn (100=1 point) REMOVED — handled by P2P Wallet now
    ═══════════════════════════════════════════════════════════ */
 function calculateCommission(total, ratePercent) {
   return Math.round(Number(total || 0) * Number(ratePercent || 0)) / 100;
@@ -1519,6 +1557,8 @@ window.TP = {
   walletAPI: TP.walletAPI,
   getP2PConfig: TP.getP2PConfig,
   invalidateP2PConfig: TP.invalidateP2PConfig,
+  // 🎁 Loyalty Points Calculator (Configurable)
+  calculateLoyaltyPoints: calculateLoyaltyPoints,
   // Remote Scanner
   generateSessionId, buildScannerURL, createScannerSession, deleteScannerSession,
   // Remote Payment (UPI device)
@@ -1531,7 +1571,7 @@ window.TP = {
   // Hold / Discount / Split
   getHeldCarts, saveHeldCarts, holdCart, deleteHeldCart,
   applyDiscountPreset, parseSplitPayments,
-  // Commission (loyalty removed)
+  // Commission
   calculateCommission,
   // CSV / Log / Label
   parseCSV, logActivity, printLabelSheet,
