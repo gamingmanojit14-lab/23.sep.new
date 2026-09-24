@@ -762,9 +762,6 @@ async function completeSale() {
     window._splitPayments = null;
   }
 
-  // ═══════════════════════════════════════════════════
-  // 🔶 P2P WALLET PAYMENT
-  // ═══════════════════════════════════════════════════
   if (method === 'p2p_wallet') {
     const custIdForP2P = A.custMode === 'existing' ? ((document.getElementById('custSelect')||{}).value || A.custId) : null;
     const custForP2P = custIdForP2P ? A.customers.find(x => x.id === custIdForP2P) : null;
@@ -804,9 +801,6 @@ async function completeSale() {
     return;
   }
 
-  // ═══════════════════════════════════════════════════
-  // UPI PAYMENT FLOW
-  // ═══════════════════════════════════════════════════
   if (method === 'upi') {
     const st = A.profile.shop.settings || {};
     if (!st.upiId) { TP.toast('Set UPI ID in Settings first', 'error'); return; }
@@ -844,9 +838,6 @@ async function completeSale() {
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // NORMAL SALE (cash / bkash / card / bank / credit)
-  // ═══════════════════════════════════════════════════
   btn.disabled = true; btn.textContent = 'Processing...';
   try {
     const tk = TP.todayKey();
@@ -959,22 +950,23 @@ async function finalizeSale({
     });
   } catch (e) {}
 
-  // ⭐ Auto loyalty credit via P2P Wallet
+  // ⭐ Auto loyalty credit via P2P Wallet — uses CONFIGURABLE rules
   if (customerId && method !== 'p2p_wallet') {
     const c = A.customers.find(x => x.id === customerId);
     if (c && c.walletId) {
       try {
         const cfg = await TP.getP2PConfig(A.shopId);
-        if (cfg && cfg.connected && cfg.allowAutoCredit !== false && cfg.loyaltyPercent > 0) {
-          const creditAmt = Math.floor(total * cfg.loyaltyPercent / 100);
+        if (cfg && cfg.connected && cfg.allowAutoCredit !== false && cfg.loyaltyEnabled) {
+          const loyaltyResult = TP.calculateLoyaltyPoints(cfg, total);
+          const creditAmt = loyaltyResult.points;
           if (creditAmt > 0) {
             await TP.walletAPI.creditPoints(cfg.backendUrl, A.shopId, cfg.secretCode, {
               customerWalletId: c.walletId,
               amount: creditAmt,
               externalRef: invoiceNo,
-              note: 'Loyalty earn',
+              note: `Loyalty: ${loyaltyResult.reason}`,
             });
-            TP.toast(`🎁 ${creditAmt} pts credited to ${c.name}`, 'success');
+            TP.toast(`🎁 +${creditAmt} pts → ${c.name}`, 'success');
           }
         }
       } catch (e) {
@@ -2635,7 +2627,7 @@ function renderAnalytics() {
    ============================================================ */
 function renderActivityLog() {
   const el = document.getElementById('page-activity');
-  const iconMap = { SALE:'🛒', PRODUCT_ADD:'📦', PRODUCT_EDIT:'✏️', PRODUCT_DELETE:'🗑', CUSTOMER_ADD:'👤', SHIFT_OPEN:'🔓', SHIFT_CLOSE:'🔒', CSV_IMPORT:'📥', RETURN:'↩️', PURCHASE:'📥', EXPENSE:'💸', CAMPAIGN:'📢', SALESMAN_ADD:'👥' };
+  const iconMap = { SALE:'🛒', PRODUCT_ADD:'📦', PRODUCT_EDIT:'✏️', PRODUCT_DELETE:'🗑', CUSTOMER_ADD:'👤', SHIFT_OPEN:'🔓', SHIFT_CLOSE:'🔒', CSV_IMPORT:'📥', RETURN:'↩️', PURCHASE:'📥', EXPENSE:'💸', CAMPAIGN:'📢', SALESMAN_ADD:'👥', P2P_SEND:'🔶' };
   el.innerHTML = `
     <div class="p-3 space-y-2">
       ${A.activityLogs.length ? A.activityLogs.slice(0, 200).map(l => `
@@ -2851,12 +2843,6 @@ function renderSettings() {
             <input id="p2pAllowAutoCredit" type="checkbox" checked class="w-4 h-4">
             <span>Allow Auto Credit <span class="text-gray-500 text-xs">(loyalty earn)</span></span>
           </label>
-          <label class="flex items-center gap-2 text-sm">
-            <span>Loyalty Rate:</span>
-            <input id="p2pLoyaltyPercent" type="number" min="0" max="100" step="0.1" value="1"
-              class="w-20 px-2 py-1 border-2 border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:outline-none">
-            <span class="text-gray-500 text-xs">% of bill</span>
-          </label>
         </div>
 
         <div id="p2pConnectedInfo" class="hidden p-3 bg-green-50 border border-green-200 rounded-xl mb-3 text-xs text-green-700">
@@ -2871,6 +2857,166 @@ function renderSettings() {
           <button id="p2pTestBtn" class="flex-1 min-w-[100px] bg-blue-600 text-white py-2.5 rounded-xl font-semibold text-sm">🔍 Test</button>
           <button id="p2pSaveBtn" class="flex-1 min-w-[100px] bg-green-600 text-white py-2.5 rounded-xl font-semibold text-sm">💾 Save</button>
           <button id="p2pClearBtn" class="flex-1 min-w-[100px] bg-white border-2 border-gray-200 text-red-600 py-2.5 rounded-xl font-semibold text-sm">🗑 Clear</button>
+        </div>
+      </div>
+
+      <!-- 🎁 LOYALTY SETTINGS -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" id="loyaltyCard">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold">🎁 Loyalty Points</h3>
+          <button id="loyaltyToggle" class="px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">OFF</button>
+        </div>
+
+        <p class="text-[11px] text-gray-500 mb-3">Configure how customers earn points automatically on every purchase</p>
+
+        <label class="block text-xs font-bold text-gray-700 mb-1">Loyalty Mode</label>
+        <div class="grid grid-cols-3 gap-1.5 mb-3">
+          <button data-loyalty-mode="percentage" class="loyalty-mode-btn py-2 rounded-lg text-[11px] font-bold border-2 transition">%</button>
+          <button data-loyalty-mode="flat" class="loyalty-mode-btn py-2 rounded-lg text-[11px] font-bold border-2 transition">Flat</button>
+          <button data-loyalty-mode="tier" class="loyalty-mode-btn py-2 rounded-lg text-[11px] font-bold border-2 transition">Tier</button>
+        </div>
+
+        <div id="loyaltyPctPanel" class="hidden mb-3">
+          <label class="block text-xs font-bold text-gray-700 mb-1">Percentage (%)</label>
+          <input id="loyaltyPercent" type="number" min="0" max="100" step="0.1" value="1"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+          <p class="text-[10px] text-gray-400 mt-1">Example: 1% of ₹1000 bill = 10 points</p>
+        </div>
+
+        <div id="loyaltyFlatPanel" class="hidden mb-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-gray-700 mb-1">Spend (₹)</label>
+              <input id="loyaltyFlatSpend" type="number" min="1" step="1" value="100"
+                class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-700 mb-1">Get Points</label>
+              <input id="loyaltyFlatPoints" type="number" min="1" step="1" value="5"
+                class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+            </div>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-1">Example: ₹100 spend → 5 points (₹500 bill = 25 points)</p>
+        </div>
+
+        <div id="loyaltyTierPanel" class="hidden mb-3">
+          <label class="block text-xs font-bold text-gray-700 mb-1">Tier Rules</label>
+          <div id="loyaltyTiersList" class="space-y-1.5 mb-2"></div>
+          <button id="loyaltyAddTier" class="w-full bg-gray-100 text-gray-700 py-2 rounded-lg text-xs font-semibold">+ Add Tier</button>
+          <p class="text-[10px] text-gray-400 mt-1">Set max=0 for open-ended last tier</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3 pt-3 border-t border-gray-100">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Min Bill (₹)</label>
+            <input id="loyaltyMinBill" type="number" min="0" step="1" value="100"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Max Points / Bill</label>
+            <input id="loyaltyMaxPoints" type="number" min="0" step="1" value="1000"
+              class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="block text-xs font-bold text-gray-700 mb-1">Bonus Multiplier</label>
+          <div class="flex gap-2">
+            <input id="loyaltyBonusToday" type="number" min="0" max="10" step="1" value="0"
+              class="flex-1 px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none text-sm">
+            <span class="text-xs text-gray-500 self-center">× extra</span>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-1">Example: 2 = double points (special offer)</p>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
+          <div class="text-[10px] text-blue-700 font-bold mb-1">📊 PREVIEW</div>
+          <div id="loyaltyPreview" class="text-xs text-gray-700">₹1000 bill = <b>— points</b></div>
+        </div>
+
+        <div id="loyaltyErr" class="hidden text-xs text-red-600 bg-red-50 p-2 rounded-lg mb-2"></div>
+        <div id="loyaltySuccess" class="hidden text-xs text-green-600 bg-green-50 p-2 rounded-lg mb-2"></div>
+
+        <button id="loyaltySaveBtn" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold text-sm active:scale-[.98]">
+          💾 Save Loyalty Rules
+        </button>
+      </div>
+
+      <!-- 💰 P2P TRANSACTION MANAGER -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" id="p2pManagerCard">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold">💰 P2P Transaction Manager</h3>
+          <button id="p2pRefreshBtn" class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">🔄 Refresh</button>
+        </div>
+
+        <div class="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 mb-4">
+          <div class="text-[10px] text-orange-700 font-bold">🔶 MERCHANT WALLET BALANCE</div>
+          <div id="p2pMerchantBalance" class="text-3xl font-extrabold text-orange-600 mt-1">— pts</div>
+          <div class="text-[10px] text-gray-500 mt-1">
+            Wallet: <b id="p2pMerchantWalletId" class="font-mono">—</b>
+          </div>
+          <div class="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+            <div class="bg-white/60 rounded-lg p-2 text-center">
+              <div class="text-gray-500">Today In</div>
+              <div id="p2pTodayIn" class="font-bold text-green-600 mt-0.5">0 pts</div>
+            </div>
+            <div class="bg-white/60 rounded-lg p-2 text-center">
+              <div class="text-gray-500">Today Out</div>
+              <div id="p2pTodayOut" class="font-bold text-red-600 mt-0.5">0 pts</div>
+            </div>
+            <div class="bg-white/60 rounded-lg p-2 text-center">
+              <div class="text-gray-500">Net</div>
+              <div id="p2pTodayNet" class="font-bold text-blue-600 mt-0.5">0 pts</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex bg-gray-100 rounded-xl p-1 mb-3">
+          <button id="p2pTabSend" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-white shadow text-orange-600">📤 Send Points</button>
+          <button id="p2pTabHistory" class="flex-1 py-2 rounded-lg text-xs font-semibold text-gray-500">📜 History</button>
+        </div>
+
+        <div id="p2pSendPanel">
+          <p class="text-[11px] text-gray-500 mb-2">Send points from merchant wallet to any customer</p>
+
+          <label class="block text-xs font-bold text-gray-700 mb-1">Customer</label>
+          <select id="p2pRecipientSelect" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-2 text-sm">
+            <option value="">-- Select customer --</option>
+          </select>
+
+          <label class="block text-xs font-bold text-gray-700 mb-1">Or Wallet ID (manual)</label>
+          <input id="p2pManualRecipient" type="text" placeholder="W-XXXXXXX or M-XXXXXXX"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 font-mono text-xs uppercase">
+
+          <label class="block text-xs font-bold text-gray-700 mb-1">Amount (points)</label>
+          <input id="p2pSendAmount" type="number" min="1" step="1" placeholder="e.g. 50"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-2 text-sm">
+
+          <label class="block text-xs font-bold text-gray-700 mb-1">Note (optional)</label>
+          <input id="p2pSendNote" placeholder="e.g. Monthly loyalty bonus"
+            class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 text-sm">
+
+          <div id="p2pSendError" class="hidden text-xs text-red-600 bg-red-50 p-2 rounded-lg mb-2"></div>
+          <div id="p2pSendSuccess" class="hidden text-xs text-green-600 bg-green-50 p-2 rounded-lg mb-2"></div>
+
+          <button id="p2pSendBtn" class="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm active:scale-[.98]">
+            📤 Send Points
+          </button>
+        </div>
+
+        <div id="p2pHistoryPanel" class="hidden">
+          <div class="flex gap-2 mb-3">
+            <select id="p2pHistoryFilter" class="flex-1 px-3 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-blue-500 focus:outline-none">
+              <option value="all">All</option>
+              <option value="in">Received (in)</option>
+              <option value="out">Sent (out)</option>
+            </select>
+            <input id="p2pHistorySearch" type="search" placeholder="Search..." 
+              class="flex-1 px-3 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-blue-500 focus:outline-none">
+          </div>
+          <div id="p2pTxList" class="space-y-1.5 max-h-80 overflow-y-auto">
+            <div class="text-center text-gray-400 py-6 text-xs">Loading...</div>
+          </div>
         </div>
       </div>
 
@@ -2985,7 +3131,6 @@ function renderSettings() {
     const secretEl = $('p2pSecretCode');
     const autoDebitEl = $('p2pAllowAutoDebit');
     const autoCreditEl = $('p2pAllowAutoCredit');
-    const loyaltyEl = $('p2pLoyaltyPercent');
     const connectedInfo = $('p2pConnectedInfo');
     const errorBox = $('p2pErrorBox');
 
@@ -2999,7 +3144,6 @@ function renderSettings() {
         secretEl.value = cfg.secretCode || '';
         autoDebitEl.checked = cfg.allowAutoDebit !== false;
         autoCreditEl.checked = cfg.allowAutoCredit !== false;
-        loyaltyEl.value = cfg.loyaltyPercent != null ? cfg.loyaltyPercent : 1;
 
         if (cfg.connected && cfg.merchantWalletId) {
           setP2PStatus('connected');
@@ -3098,7 +3242,6 @@ function renderSettings() {
           secretCode: code,
           allowAutoDebit: autoDebitEl.checked,
           allowAutoCredit: autoCreditEl.checked,
-          loyaltyPercent: parseFloat(loyaltyEl.value) || 0,
           merchantWalletId: merchantWalletId || null,
           shopName: shopName || null,
           connected: !!(merchantWalletId),
@@ -3124,12 +3267,386 @@ function renderSettings() {
         secretEl.value = '';
         autoDebitEl.checked = true;
         autoCreditEl.checked = true;
-        loyaltyEl.value = 1;
         setP2PStatus('not_connected');
         connectedInfo.classList.add('hidden');
         TP.toast('Cleared', 'success');
       } catch (e) { showP2PError(e.message); }
     };
+  })();
+
+  /* ═══════════════════════════════════════════════════════
+     🎁 LOYALTY SETTINGS LOGIC
+     ═══════════════════════════════════════════════════════ */
+  (async function initLoyaltySettings() {
+    const $ = id => document.getElementById(id);
+    const card = $('loyaltyCard');
+    if (!card) return;
+
+    let cfg = await TP.walletAPI.getConfig(A.shopId) || {};
+    let currentMode = cfg.loyaltyMode || 'percentage';
+    let tempTiers = [];
+
+    function loadValues() {
+      $('loyaltyToggle').textContent = cfg.loyaltyEnabled ? 'ON' : 'OFF';
+      $('loyaltyToggle').className = `px-3 py-1 rounded-lg text-xs font-bold ${cfg.loyaltyEnabled ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'}`;
+
+      currentMode = cfg.loyaltyMode || 'percentage';
+
+      $('loyaltyPercent').value = cfg.loyaltyPercent != null ? cfg.loyaltyPercent : 1;
+      $('loyaltyFlatSpend').value = cfg.loyaltyFlat?.spend || 100;
+      $('loyaltyFlatPoints').value = cfg.loyaltyFlat?.points || 5;
+
+      $('loyaltyMinBill').value = cfg.loyaltyMinBill != null ? cfg.loyaltyMinBill : 100;
+      $('loyaltyMaxPoints').value = cfg.loyaltyMaxPoints != null ? cfg.loyaltyMaxPoints : 1000;
+      $('loyaltyBonusToday').value = cfg.loyaltyBonusToday != null ? cfg.loyaltyBonusToday : 0;
+
+      renderTiers(cfg.loyaltyTiers || [
+        { minSpend: 500, maxSpend: 999, points: 25 },
+        { minSpend: 1000, maxSpend: 0, points: 100 }
+      ]);
+
+      updateModeUI();
+      updatePreview();
+    }
+
+    function renderTiers(tiers) {
+      tempTiers = tiers.map(t => ({ ...t }));
+      const list = $('loyaltyTiersList');
+      if (!list) return;
+
+      list.innerHTML = tempTiers.map((t, i) => `
+        <div class="grid grid-cols-[1fr_1fr_1fr_30px] gap-1 items-center">
+          <input type="number" data-tier-min="${i}" value="${t.minSpend}" placeholder="Min ₹"
+            class="px-2 py-1.5 border-2 border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:outline-none">
+          <input type="number" data-tier-max="${i}" value="${t.maxSpend}" placeholder="Max ₹"
+            class="px-2 py-1.5 border-2 border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:outline-none">
+          <input type="number" data-tier-pts="${i}" value="${t.points}" placeholder="Points"
+            class="px-2 py-1.5 border-2 border-gray-200 rounded-lg text-xs focus:border-blue-500 focus:outline-none">
+          <button data-tier-rm="${i}" class="text-red-500 font-bold text-sm">×</button>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('[data-tier-min]').forEach(inp => inp.addEventListener('input', e => {
+        tempTiers[+e.target.dataset.tierMin].minSpend = +e.target.value || 0;
+        updatePreview();
+      }));
+      list.querySelectorAll('[data-tier-max]').forEach(inp => inp.addEventListener('input', e => {
+        tempTiers[+e.target.dataset.tierMax].maxSpend = +e.target.value || 0;
+        updatePreview();
+      }));
+      list.querySelectorAll('[data-tier-pts]').forEach(inp => inp.addEventListener('input', e => {
+        tempTiers[+e.target.dataset.tierPts].points = +e.target.value || 0;
+        updatePreview();
+      }));
+      list.querySelectorAll('[data-tier-rm]').forEach(b => b.addEventListener('click', () => {
+        tempTiers.splice(+b.dataset.tierRm, 1);
+        renderTiers(tempTiers);
+        updatePreview();
+      }));
+    }
+
+    $('loyaltyAddTier').onclick = () => {
+      tempTiers.push({ minSpend: 0, maxSpend: 0, points: 0 });
+      renderTiers(tempTiers);
+    };
+
+    function updateModeUI() {
+      card.querySelectorAll('.loyalty-mode-btn').forEach(b => {
+        const on = b.dataset.loyaltyMode === currentMode;
+        b.className = `loyalty-mode-btn py-2 rounded-lg text-[11px] font-bold border-2 transition ${on ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200'}`;
+      });
+      $('loyaltyPctPanel').classList.toggle('hidden', currentMode !== 'percentage');
+      $('loyaltyFlatPanel').classList.toggle('hidden', currentMode !== 'flat');
+      $('loyaltyTierPanel').classList.toggle('hidden', currentMode !== 'tier');
+    }
+
+    card.querySelectorAll('.loyalty-mode-btn').forEach(b => b.addEventListener('click', () => {
+      currentMode = b.dataset.loyaltyMode;
+      updateModeUI();
+      updatePreview();
+    }));
+
+    function buildConfigFromUI() {
+      return {
+        loyaltyEnabled: cfg.loyaltyEnabled,
+        loyaltyMode: currentMode,
+        loyaltyPercent: +$('loyaltyPercent').value || 0,
+        loyaltyFlat: {
+          spend: +$('loyaltyFlatSpend').value || 100,
+          points: +$('loyaltyFlatPoints').value || 0,
+        },
+        loyaltyTiers: tempTiers.map(t => ({
+          minSpend: +t.minSpend || 0,
+          maxSpend: +t.maxSpend || 0,
+          points: +t.points || 0,
+        })),
+        loyaltyMinBill: +$('loyaltyMinBill').value || 0,
+        loyaltyMaxPoints: +$('loyaltyMaxPoints').value || 0,
+        loyaltyBonusToday: +$('loyaltyBonusToday').value || 0,
+      };
+    }
+
+    function updatePreview() {
+      const ui = buildConfigFromUI();
+      const sampleBills = [500, 1000, 2500];
+      const results = sampleBills.map(b => {
+        const r = TP.calculateLoyaltyPoints(ui, b);
+        return `₹${b}: ${r.points}pts`;
+      });
+      $('loyaltyPreview').innerHTML = results.join(' · ');
+    }
+
+    ['loyaltyPercent','loyaltyFlatSpend','loyaltyFlatPoints','loyaltyMinBill','loyaltyMaxPoints','loyaltyBonusToday']
+      .forEach(id => { const e = $(id); if (e) e.addEventListener('input', updatePreview); });
+
+    $('loyaltyToggle').onclick = () => {
+      cfg.loyaltyEnabled = !cfg.loyaltyEnabled;
+      loadValues();
+      updatePreview();
+    };
+
+    $('loyaltySaveBtn').onclick = async () => {
+      const err = $('loyaltyErr');
+      const ok = $('loyaltySuccess');
+      err.classList.add('hidden');
+      ok.classList.add('hidden');
+
+      try {
+        const ui = buildConfigFromUI();
+        await TP.walletAPI.saveConfig(A.shopId, ui);
+        TP.invalidateP2PConfig();
+        cfg = { ...cfg, ...ui };
+        ok.textContent = '✅ Loyalty rules saved';
+        ok.classList.remove('hidden');
+        setTimeout(() => ok.classList.add('hidden'), 3000);
+      } catch (e) {
+        err.textContent = e.message || 'Save failed';
+        err.classList.remove('hidden');
+      }
+    };
+
+    loadValues();
+    updatePreview();
+  })();
+
+  /* ═══════════════════════════════════════════════════════
+     💰 P2P TRANSACTION MANAGER
+     ═══════════════════════════════════════════════════════ */
+  (async function initP2PManager() {
+    const $ = id => document.getElementById(id);
+    const card = $('p2pManagerCard');
+    if (!card) return;
+
+    const state = {
+      cfg: null,
+      merchantWalletId: null,
+      merchantBalance: 0,
+      transactions: [],
+      unsubTx: null,
+    };
+
+    state.cfg = await TP.getP2PConfig(A.shopId);
+    if (!state.cfg || !state.cfg.connected || !state.cfg.merchantWalletId) {
+      card.innerHTML = `
+        <h3 class="font-bold mb-2">💰 P2P Transaction Manager</h3>
+        <div class="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
+          ⚠️ P2P Wallet not connected. Configure the integration above first.
+        </div>`;
+      return;
+    }
+
+    state.merchantWalletId = state.cfg.merchantWalletId;
+    $('p2pMerchantWalletId').textContent = state.merchantWalletId;
+
+    const populateRecipients = () => {
+      const sel = $('p2pRecipientSelect');
+      const withWallet = A.customers.filter(c => c.walletId);
+      sel.innerHTML = '<option value="">-- Select customer --</option>' +
+        withWallet.map(c => `<option value="${c.walletId}">${TP.esc(c.name)} (${c.walletId})</option>`).join('');
+    };
+    populateRecipients();
+
+    $('p2pRecipientSelect').addEventListener('change', e => {
+      if (e.target.value) {
+        $('p2pManualRecipient').value = e.target.value;
+      }
+    });
+
+    $('p2pTabSend').onclick = () => {
+      $('p2pTabSend').className = 'flex-1 py-2 rounded-lg text-xs font-semibold bg-white shadow text-orange-600';
+      $('p2pTabHistory').className = 'flex-1 py-2 rounded-lg text-xs font-semibold text-gray-500';
+      $('p2pSendPanel').classList.remove('hidden');
+      $('p2pHistoryPanel').classList.add('hidden');
+    };
+    $('p2pTabHistory').onclick = () => {
+      $('p2pTabHistory').className = 'flex-1 py-2 rounded-lg text-xs font-semibold bg-white shadow text-orange-600';
+      $('p2pTabSend').className = 'flex-1 py-2 rounded-lg text-xs font-semibold text-gray-500';
+      $('p2pHistoryPanel').classList.remove('hidden');
+      $('p2pSendPanel').classList.add('hidden');
+      renderHistory();
+    };
+
+    async function refreshBalance() {
+      try {
+        const res = await TP.walletAPI.getBalance(
+          state.cfg.backendUrl, A.shopId, state.cfg.secretCode,
+          state.merchantWalletId
+        );
+        state.merchantBalance = +res.balance || 0;
+        $('p2pMerchantBalance').textContent = state.merchantBalance.toLocaleString() + ' pts';
+      } catch (e) {
+        console.warn('Balance fetch error:', e);
+        $('p2pMerchantBalance').textContent = 'Error';
+      }
+    }
+
+    function listenTransactions() {
+      if (state.unsubTx) { try { state.unsubTx(); } catch(e){} }
+
+      state.unsubTx = TP.db.collection('shops').doc(A.shopId)
+        .collection('walletPayments')
+        .orderBy('createdAt', 'desc')
+        .limit(200)
+        .onSnapshot(snap => {
+          state.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          updateTodayStats();
+          if (!$('p2pHistoryPanel').classList.contains('hidden')) renderHistory();
+        }, err => console.warn('tx listener:', err));
+    }
+
+    function updateTodayStats() {
+      const today = TP.todayKey();
+      let todayIn = 0, todayOut = 0;
+
+      state.transactions.forEach(tx => {
+        const d = tx.createdAt?.toDate ? tx.createdAt.toDate() : new Date(tx.createdAt || 0);
+        if (TP.todayKey(d) !== today) return;
+
+        const amt = +tx.amount || 0;
+        if (tx.toWalletId === state.merchantWalletId) todayIn += amt;
+        else if (tx.fromWalletId === state.merchantWalletId) todayOut += amt;
+      });
+
+      $('p2pTodayIn').textContent = todayIn.toLocaleString() + ' pts';
+      $('p2pTodayOut').textContent = todayOut.toLocaleString() + ' pts';
+      $('p2pTodayNet').textContent = (todayIn - todayOut).toLocaleString() + ' pts';
+    }
+
+    function renderHistory() {
+      const filter = $('p2pHistoryFilter').value;
+      const q = ($('p2pHistorySearch').value || '').toLowerCase();
+
+      let list = state.transactions.slice();
+
+      if (filter === 'in') list = list.filter(tx => tx.toWalletId === state.merchantWalletId);
+      if (filter === 'out') list = list.filter(tx => tx.fromWalletId === state.merchantWalletId);
+
+      if (q) {
+        list = list.filter(tx =>
+          (tx.txId || '').toLowerCase().includes(q) ||
+          (tx.invoiceNo || '').toLowerCase().includes(q) ||
+          (tx.fromWalletId || '').toLowerCase().includes(q) ||
+          (tx.toWalletId || '').toLowerCase().includes(q) ||
+          (tx.note || '').toLowerCase().includes(q)
+        );
+      }
+
+      const el = $('p2pTxList');
+
+      if (!list.length) {
+        el.innerHTML = '<div class="text-center text-gray-400 py-6 text-xs">No transactions</div>';
+        return;
+      }
+
+      el.innerHTML = list.slice(0, 100).map(tx => {
+        const isIn = tx.toWalletId === state.merchantWalletId;
+        const isOut = tx.fromWalletId === state.merchantWalletId;
+        const amt = +tx.amount || 0;
+        const sign = isIn ? '+' : (isOut ? '-' : '');
+        const color = isIn ? 'text-green-600' : (isOut ? 'text-red-600' : 'text-gray-600');
+        const icon = isIn ? '⬇️' : (isOut ? '⬆️' : '↔️');
+        const other = isIn ? tx.fromWalletId : (isOut ? tx.toWalletId : (tx.toWalletId || '—'));
+
+        return `
+          <div class="bg-gray-50 rounded-lg p-2.5 text-xs">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold truncate">${icon} ${TP.esc(other || 'Unknown')}</div>
+                ${tx.invoiceNo ? `<div class="text-[10px] text-gray-500 font-mono">${TP.esc(tx.invoiceNo)}</div>` : ''}
+                ${tx.note ? `<div class="text-[10px] text-gray-400 truncate">${TP.esc(tx.note)}</div>` : ''}
+                <div class="text-[10px] text-gray-400 mt-0.5">${TP.fmtDate(tx.createdAt)}</div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <div class="font-bold ${color}">${sign}${amt} pts</div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    $('p2pHistoryFilter').addEventListener('change', renderHistory);
+    $('p2pHistorySearch').addEventListener('input', renderHistory);
+
+    $('p2pSendBtn').onclick = async () => {
+      const errEl = $('p2pSendError');
+      const okEl = $('p2pSendSuccess');
+      errEl.classList.add('hidden');
+      okEl.classList.add('hidden');
+
+      const recipient = ($('p2pManualRecipient').value || '').trim().toUpperCase();
+      const amount = +($('p2pSendAmount').value || 0);
+      const note = ($('p2pSendNote').value || '').trim();
+
+      if (!recipient) { errEl.textContent = 'Enter recipient wallet ID'; errEl.classList.remove('hidden'); return; }
+      if (!recipient.match(/^[WM]-/i)) { errEl.textContent = 'Invalid wallet ID (must start with W- or M-)'; errEl.classList.remove('hidden'); return; }
+      if (!amount || amount <= 0) { errEl.textContent = 'Enter valid amount'; errEl.classList.remove('hidden'); return; }
+      if (amount > state.merchantBalance) { errEl.textContent = 'Insufficient merchant balance'; errEl.classList.remove('hidden'); return; }
+
+      if (!await TP.askConfirm(`Send ${amount} pts to ${recipient}?`)) return;
+
+      const btn = $('p2pSendBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Sending...';
+
+      try {
+        const res = await TP.walletAPI.creditPoints(
+          state.cfg.backendUrl, A.shopId, state.cfg.secretCode,
+          {
+            customerWalletId: recipient,
+            amount: amount,
+            externalRef: 'MANUAL-' + Date.now(),
+            note: note || 'Manual send from admin',
+          }
+        );
+
+        okEl.textContent = `✅ ${amount} pts sent! New balance: ${res.newBalance} pts`;
+        okEl.classList.remove('hidden');
+
+        await TP.logActivity(A.shopId, A.profile.uid, A.profile.name, 'P2P_SEND', `${amount} pts → ${recipient}`);
+
+        $('p2pSendAmount').value = '';
+        $('p2pSendNote').value = '';
+        $('p2pManualRecipient').value = '';
+        $('p2pRecipientSelect').value = '';
+
+        await refreshBalance();
+        setTimeout(() => okEl.classList.add('hidden'), 5000);
+      } catch (e) {
+        errEl.textContent = e.message || 'Send failed';
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 Send Points';
+      }
+    };
+
+    $('p2pRefreshBtn').onclick = () => {
+      refreshBalance();
+      TP.toast('Refreshing...', 'info');
+    };
+
+    await refreshBalance();
+    listenTransactions();
   })();
 }
 
