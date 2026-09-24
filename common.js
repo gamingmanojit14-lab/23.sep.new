@@ -10,7 +10,8 @@
    - Hold/Park Sale
    - Discount Presets
    - Split Payment Parser
-   - Loyalty Points
+   - Loyalty Points + Points Payment
+   - Customer Help ID System
    - Commission Calculator
    - CSV Parser
    - Activity Log
@@ -701,6 +702,38 @@ const shopIdKey = id => String(id || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 const salesmanEmail = (sid, u) => `s-${shopIdKey(sid)}-${String(u||'').toLowerCase().replace(/[^a-z0-9]/g,'')}@textilepos-user.app`;
 
 /* ═══════════════════════════════════════════════════════════
+   CUSTOMER HELP ID SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+function generateCustomerCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = 'C-';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+async function generateUniqueCustomerCode() {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const code = generateCustomerCode();
+    const doc = await db.collection('customerCodes').doc(code).get();
+    if (!doc.exists) return code;
+  }
+  throw new Error('Could not generate unique customer code');
+}
+async function registerCustomerCode(code, shopId, customerId, phone, name, batch) {
+  const data = {
+    code, shopId, customerId,
+    phone: phone || '',
+    name: name || '',
+    createdAt: FV.serverTimestamp(),
+  };
+  if (batch) {
+    batch.set(db.collection('customerCodes').doc(code), data);
+  } else {
+    await db.collection('customerCodes').doc(code).set(data);
+  }
+  return data;
+}
+
+/* ═══════════════════════════════════════════════════════════
    SCANNER SESSION
    ═══════════════════════════════════════════════════════════ */
 function generateSessionId() {
@@ -769,8 +802,6 @@ async function deletePaymentSession(sessionId) {
     await batch.commit();
   } catch (e) { console.error('deletePaymentSession:', e); }
 }
-
-/* ── Payment Request Flow ── */
 async function createPaymentRequest(sessionId, { amount, invoiceNo, customerName }) {
   const reqRef = db.collection('paymentSessions').doc(sessionId).collection('requests').doc();
   await reqRef.set({
@@ -892,6 +923,7 @@ function buildInvoiceMessage(sale, settings) {
   L.push('');
   L.push(`*Invoice:* ${sale.invoiceNo}`);
   L.push(`*Date:* ${fmtDate(sale.saleDate)}`);
+  if (sale.customerCode) L.push(`*Help ID:* ${sale.customerCode}`);
   L.push('');
   L.push('*Items:*');
   sale.items.forEach((it, i) => {
@@ -975,11 +1007,21 @@ function parseSplitPayments(str, total) {
    ═══════════════════════════════════════════════════════════ */
 const LOYALTY_EARN_PER = 100;
 const LOYALTY_REDEEM_VALUE = 1;
+const POINTS_TO_RUPEES = 1;
+
 function calculateLoyaltyEarn(amount) {
   return Math.floor(Number(amount || 0) / LOYALTY_EARN_PER);
 }
 function calculateCommission(total, ratePercent) {
   return Math.round(Number(total || 0) * Number(ratePercent || 0)) / 100;
+}
+
+/* ── Points Payment Helpers ── */
+function pointsToMoney(points) {
+  return Number(points || 0) * POINTS_TO_RUPEES;
+}
+function isPointsPaymentEnabled(settings) {
+  return settings && settings.pointsPaymentEnabled === true;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1053,7 +1095,6 @@ function printLabelSheet(products, settings) {
         <div class="code">${esc(p.barcode || '')}</div>
       </div>`).join('')}</div>
   </body></html>`;
-  // Uses main page's qrcode function
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
@@ -1287,6 +1328,8 @@ window.TP = {
   normalizeEmail, isValidGmail, normalizePhone, isValidPhone,
   // Shop
   generateShopId, salesmanEmail,
+  // Customer Help ID
+  generateCustomerCode, generateUniqueCustomerCode, registerCustomerCode,
   // Remote Scanner
   generateSessionId, buildScannerURL, createScannerSession, deleteScannerSession,
   // Remote Payment
@@ -1301,6 +1344,8 @@ window.TP = {
   applyDiscountPreset, parseSplitPayments,
   // Loyalty / Commission
   calculateLoyaltyEarn, calculateCommission, LOYALTY_EARN_PER, LOYALTY_REDEEM_VALUE,
+  // Points Payment
+  pointsToMoney, isPointsPaymentEnabled, POINTS_TO_RUPEES,
   // CSV / Log / Label
   parseCSV, logActivity, printLabelSheet,
   // Appearance / i18n
