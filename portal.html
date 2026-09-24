@@ -189,6 +189,18 @@
       </div>
     </div>
 
+    <!-- 🔐 PAYMENT PIN CARD -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-bold text-sm">🔐 Payment PIN</h3>
+        <span id="pinStatusBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-bold">NOT SET</span>
+      </div>
+      <p class="text-[11px] text-gray-500 mb-3">Required to pay with points at shop</p>
+      <button id="managePinBtn" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold text-sm active:scale-[.98]">
+        Set Payment PIN
+      </button>
+    </div>
+
     <div class="bg-white rounded-2xl p-4 shadow-sm">
       <h3 class="font-bold text-sm mb-3">🧾 Recent Invoices</h3>
       <div id="invoiceList" class="space-y-2">
@@ -198,6 +210,31 @@
 
     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-[11px] text-gray-600 leading-relaxed">
       <b class="text-blue-700">💡 Tip:</b> এই পেজ খোলা রাখুন। Salesman points payment দিলে স্বয়ংক্রিয়ভাবে payment page খুলবে।
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     🔐 PIN MODAL
+     ═══════════════════════════════════════════ -->
+<div id="pinModal" class="hide fixed inset-0 z-[999] bg-black/70 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-6">
+    <h3 class="text-lg font-bold mb-1">🔐 Set Payment PIN</h3>
+    <p class="text-xs text-gray-500 mb-4">Use this PIN when paying with points</p>
+
+    <label class="block text-xs font-bold text-gray-600 mb-1">New 4-digit PIN</label>
+    <input id="modalPin1" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"
+      class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-center font-mono text-2xl tracking-[0.5em] mb-3">
+
+    <label class="block text-xs font-bold text-gray-600 mb-1">Confirm PIN</label>
+    <input id="modalPin2" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"
+      class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-center font-mono text-2xl tracking-[0.5em]">
+
+    <p id="pinModalErr" class="text-xs text-red-600 mt-2 min-h-[16px] text-center"></p>
+
+    <div class="flex gap-2 mt-4">
+      <button id="pinModalCancel" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">Cancel</button>
+      <button id="pinModalSave" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold">Save PIN</button>
     </div>
   </div>
 </div>
@@ -240,6 +277,13 @@
     return p;
   }
 
+  async function hashPin(pin) {
+    const enc = new TextEncoder();
+    const data = enc.encode('tp_pin_v1_' + pin);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
     $('verifyErr').textContent = 'Firebase config missing';
     $('verifyBtn').disabled = true;
@@ -249,10 +293,12 @@
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
   const auth = firebase.auth();
+  const FV = firebase.firestore.FieldValue;
 
   let verified = null;
   let pointsWatcher = null;
   let lastHandledRequestId = null;
+  let currentCustomer = null;
 
   /* ═══════════════════════════════════════════
      VERIFY Help ID + Phone
@@ -293,7 +339,6 @@
         return;
       }
 
-      // ⭐️ customerPhone সেভ করা হচ্ছে — সেশন রিস্টোরের জন্য জরুরি
       verified = {
         helpId,
         shopId: codeData.shopId,
@@ -420,6 +465,7 @@
     try { await auth.signOut(); } catch (e) {}
     stopPointsWatcher();
     verified = null;
+    currentCustomer = null;
     $('inpHelpId').value = '';
     $('inpPhone').value = '';
     $('verifyErr').textContent = '';
@@ -454,7 +500,7 @@
             helpId: saved.helpId,
             shopId: codeData.shopId,
             customerId: codeData.customerId,
-            customerPhone: saved.phone,   // ⭐️ সঠিক ফোন নম্বর সেভ করা
+            customerPhone: saved.phone,
             shop: shopDoc.data(),
           };
         } catch (e) {
@@ -483,7 +529,7 @@
   async function loadDashboard(user) {
     const { helpId, shopId, customerId, shop } = verified;
 
-    // কাস্টমার লগইন করার পর এখন ডেটা ফেচ করা হচ্ছে (Security Rules অনুযায়ী)
+    // Load customer data AFTER login
     let customer;
     try {
       const custDoc = await db.collection('shops').doc(shopId)
@@ -496,6 +542,7 @@
       }
       customer = custDoc.data();
       verified.customer = customer;
+      currentCustomer = customer;
     } catch (e) {
       console.error("Error fetching customer data:", e);
       alert("Failed to load customer data. Please try again.");
@@ -549,13 +596,15 @@
         stopPointsWatcher();
         localStorage.removeItem('tp_portal_session');
         verified = null;
+        currentCustomer = null;
         try { await auth.signOut(); } catch (e) {}
         location.reload();
       };
 
-      showPanel('dashPanel');
+      // ⭐ PIN Management
+      updatePinStatusBadge();
 
-      // ⭐ POINTS রিকোয়েস্ট মনিটর করা শুরু
+      showPanel('dashPanel');
       startPointsWatcher();
 
     } catch (e) {
@@ -565,8 +614,87 @@
   }
 
   /* ═══════════════════════════════════════════
+     🔐 PIN MANAGEMENT
+     ═══════════════════════════════════════════ */
+  function updatePinStatusBadge() {
+    const pinSet = !!(currentCustomer && currentCustomer.paymentPin);
+    const badge = $('pinStatusBadge');
+    const btn = $('managePinBtn');
+    if (pinSet) {
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold';
+      badge.textContent = 'ACTIVE';
+      btn.textContent = 'Change Payment PIN';
+    } else {
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-bold';
+      badge.textContent = 'NOT SET';
+      btn.textContent = 'Set Payment PIN';
+    }
+  }
+
+  $('managePinBtn').addEventListener('click', () => {
+    $('modalPin1').value = '';
+    $('modalPin2').value = '';
+    $('pinModalErr').textContent = '';
+    $('pinModalSave').disabled = false;
+    $('pinModalSave').textContent = 'Save PIN';
+    $('pinModal').classList.remove('hide');
+    $('pinModal').classList.add('flex');
+    setTimeout(() => $('modalPin1').focus(), 200);
+  });
+
+  $('pinModalCancel').addEventListener('click', () => {
+    $('pinModal').classList.add('hide');
+    $('pinModal').classList.remove('flex');
+  });
+
+  $('modalPin1').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+  $('modalPin2').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+
+  $('pinModalSave').addEventListener('click', async () => {
+    const pin1 = $('modalPin1').value;
+    const pin2 = $('modalPin2').value;
+    $('pinModalErr').textContent = '';
+
+    if (!/^\d{4}$/.test(pin1)) { $('pinModalErr').textContent = 'PIN must be exactly 4 digits'; return; }
+    if (pin1 !== pin2) { $('pinModalErr').textContent = 'PINs do not match'; return; }
+
+    const btn = $('pinModalSave');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const hash = await hashPin(pin1);
+      await db.collection('shops').doc(verified.shopId)
+        .collection('customers').doc(verified.customerId)
+        .update({
+          paymentPin: hash,
+          paymentPinSetAt: FV.serverTimestamp(),
+        });
+
+      currentCustomer.paymentPin = hash;
+      verified.customer.paymentPin = hash;
+      updatePinStatusBadge();
+
+      $('pinModal').classList.add('hide');
+      $('pinModal').classList.remove('flex');
+
+      // Success toast
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 20px;border-radius:12px;font-weight:700;z-index:10000;font-family:Inter,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.3)';
+      toast.textContent = '✓ PIN saved successfully';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2400);
+
+    } catch (e) {
+      console.error(e);
+      $('pinModalErr').textContent = e.message || 'Failed to save PIN';
+      btn.disabled = false;
+      btn.textContent = 'Save PIN';
+    }
+  });
+
+  /* ═══════════════════════════════════════════
      ⭐ POINTS REQUEST WATCHER
-     নতুন রিকোয়েস্ট এলে অটো point-pay.html এ পাঠাবে
      ═══════════════════════════════════════════ */
   function startPointsWatcher() {
     stopPointsWatcher();
@@ -580,17 +708,15 @@
         snap.docChanges().forEach(change => {
           if (change.type !== 'added') return;
           const d = change.doc.data();
-          const docId = change.doc.id;   // ⭐️ আসল ডকুমেন্ট আইডি (requestId)
+          const docId = change.doc.id;
 
-          // শুধু pending, non-expired, recent রিকোয়েস্ট প্রসেস করব
           if (d.status !== 'pending') return;
           if (!d.expiresAt || d.expiresAt < now) return;
           if (d.createdAt && d.createdAt.toDate) {
             const age = now - d.createdAt.toDate().getTime();
-            if (age > 3 * 60 * 1000) return; // ৩ মিনিটের পুরনো হলে বাদ
+            if (age > 3 * 60 * 1000) return;
           }
 
-          // ডুপ্লিকেট হ্যান্ডলিং এড়াতে
           if (lastHandledRequestId === docId) return;
           lastHandledRequestId = docId;
 
@@ -598,7 +724,6 @@
         });
       }, err => {
         console.error('Points watcher error:', err);
-        // ৫ সেকেন্ড পর আবার চেষ্টা
         setTimeout(() => { if (verified) startPointsWatcher(); }, 5000);
       });
   }
@@ -610,10 +735,8 @@
   function handlePointsRequest(d, docId) {
     console.log('⭐ Points request received:', docId, d);
 
-    // ভাইব্রেশন
     try { navigator.vibrate && navigator.vibrate([100, 80, 100, 80, 200]); } catch (e) {}
 
-    // বিপ সাউন্ড
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
@@ -627,17 +750,15 @@
       osc.stop(ctx.currentTime + 0.15);
     } catch (e) {}
 
-    // ফ্লোটিং অ্যালার্ট দেখাও
     const alertEl = $('pointsAlert');
     if (alertEl) {
       alertEl.classList.remove('hidden');
       $('pointsAlertMsg').textContent = `Bill ₹${Number(d.billTotal || 0).toFixed(2)} · Opening...`;
     }
 
-    // ৮০০ms পর point-pay.html এ রিডাইরেক্ট
     setTimeout(() => {
-      const url = new URL('points-pay.html', location.href);
-      url.searchParams.set('r', docId);   // ⭐️ docId ব্যবহার করা হচ্ছে
+      const url = new URL('point-pay.html', location.href);
+      url.searchParams.set('r', docId);
       location.href = url.href;
     }, 800);
   }
@@ -653,7 +774,6 @@
     }
   })();
 
-  // পেজ বন্ধ হলে ক্লিনআপ
   window.addEventListener('beforeunload', () => {
     stopPointsWatcher();
   });
