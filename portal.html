@@ -9,6 +9,10 @@
 <style>
   body{ font-family:'Inter',system-ui,sans-serif; margin:0; }
   .hide{ display:none !important; }
+  @keyframes fadeIn{ from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+  .fade-in{ animation:fadeIn .25s ease; }
+  .spin { display:inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
 </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -17,39 +21,141 @@
   <div class="text-center my-6">
     <div class="text-5xl mb-2">🧵</div>
     <h1 class="text-2xl font-extrabold text-gray-800">Customer Portal</h1>
-    <p class="text-xs text-gray-500 mt-1">View your invoices & dues</p>
+    <p class="text-xs text-gray-500 mt-1" id="headerSub">Login to view your invoices</p>
   </div>
 
-  <div id="loginPanel" class="bg-white rounded-2xl p-6 shadow-sm">
-    <label class="block text-xs font-bold text-gray-600 mb-1">Shop ID</label>
-    <input id="inpShop" placeholder="SHOP-XXXXXX"
-      class="w-full px-3 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-3 font-mono uppercase">
+  <!-- ═══════════════════════════════════════
+       PANEL 1: PHONE ENTRY
+       ═══════════════════════════════════════ -->
+  <div id="phonePanel" class="bg-white rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center justify-center mb-4">
+      <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-2xl">📱</div>
+    </div>
+    <label class="block text-sm font-bold text-gray-700 mb-2 text-center">Enter your phone number</label>
+    <p class="text-[11px] text-gray-400 text-center mb-3">The number you gave at the shop</p>
 
-    <label class="block text-xs font-bold text-gray-600 mb-1">Your phone number</label>
-    <input id="inpPhone" type="tel" inputmode="numeric" placeholder="10-digit mobile"
-      class="w-full px-3 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-4">
+    <input id="inpPhone" type="tel" inputmode="numeric" placeholder="10-digit mobile" autocomplete="off"
+      class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none mb-4 text-xl font-mono text-center tracking-wider">
 
-    <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition active:scale-[.98]">
-      View My Account
+    <button id="phoneContinueBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition active:scale-[.98]">
+      Continue →
     </button>
-    <p id="loginErr" class="text-xs text-red-600 mt-2 text-center"></p>
+    <p id="phoneErr" class="text-xs text-red-600 mt-3 text-center min-h-[16px]"></p>
   </div>
 
-  <div id="dashPanel" class="hide space-y-3">
+  <!-- ═══════════════════════════════════════
+       PANEL 2: AUTH OPTIONS
+       ═══════════════════════════════════════ -->
+  <div id="authPanel" class="hide fade-in bg-white rounded-2xl p-6 shadow-sm">
+    <div class="text-center mb-5">
+      <div class="text-3xl mb-1">🔐</div>
+      <div class="text-sm font-semibold text-gray-700">Phone verified ✓</div>
+      <div id="verifiedPhone" class="text-lg font-bold text-blue-600 mt-1 font-mono"></div>
+      <p class="text-xs text-gray-500 mt-2">Now choose how to sign in</p>
+    </div>
+
+    <!-- Google Button -->
+    <button id="googleBtn" class="w-full bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 py-3.5 rounded-xl font-semibold flex items-center justify-center gap-3 transition active:scale-[.98] mb-4">
+      <svg width="20" height="20" viewBox="0 0 48 48">
+        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.6 39.6 16.2 44 24 44z"/>
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C41.4 35.3 44 30 44 24c0-1.3-.1-2.3-.4-3.5z"/>
+      </svg>
+      <span>Sign in with Google</span>
+    </button>
+
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex-1 h-px bg-gray-200"></div>
+      <span class="text-[10px] text-gray-400 font-semibold">OR</span>
+      <div class="flex-1 h-px bg-gray-200"></div>
+    </div>
+
+    <!-- Tabs: Login / Register -->
+    <div class="flex bg-gray-100 rounded-xl p-1 mb-4">
+      <button id="tabLogin" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600">
+        Login
+      </button>
+      <button id="tabRegister" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500">
+        Register
+      </button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="emailLoginForm" class="space-y-3">
+      <input id="loginEmail" type="email" placeholder="Gmail address" autocomplete="email"
+        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password"
+        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <button type="submit" id="loginEmailBtn"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition active:scale-[.98] disabled:opacity-60">
+        Login
+      </button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="emailRegisterForm" class="space-y-3 hide">
+      <input id="regEmail" type="email" placeholder="Gmail address" autocomplete="email"
+        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <input id="regPass" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" minlength="6"
+        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <input id="regPass2" type="password" placeholder="Confirm password" autocomplete="new-password" minlength="6"
+        class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
+      <button type="submit" id="registerEmailBtn"
+        class="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-xl font-bold transition active:scale-[.98] disabled:opacity-60">
+        Create Account
+      </button>
+    </form>
+
+    <p id="authErr" class="text-xs text-red-600 mt-3 text-center min-h-[16px]"></p>
+
+    <button id="backToPhone" class="w-full mt-4 text-xs text-gray-500 underline">
+      ← Change phone number
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PANEL 3: MULTI-SHOP SELECTOR
+       ═══════════════════════════════════════ -->
+  <div id="shopSelector" class="hide fade-in bg-white rounded-2xl p-6 shadow-sm">
+    <div class="text-center mb-4">
+      <div class="text-3xl mb-1">🏪</div>
+      <h2 class="font-bold text-lg">Select a Shop</h2>
+      <p class="text-xs text-gray-500 mt-1">Your phone is registered at multiple shops</p>
+    </div>
+    <div id="shopList" class="space-y-2 mb-4"></div>
+    <button id="backToAuth" class="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm">
+      ← Back
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PANEL 4: DASHBOARD
+       ═══════════════════════════════════════ -->
+  <div id="dashPanel" class="hide space-y-3 fade-in">
     <div class="bg-white rounded-2xl p-4 shadow-sm">
-      <div class="text-xs text-gray-500">Welcome</div>
-      <div class="text-xl font-extrabold" id="custName">—</div>
-      <div class="text-xs text-gray-500 mt-1" id="shopName">—</div>
-      <button id="logoutBtn" class="mt-3 text-xs text-red-600 underline">Logout</button>
+      <div class="flex items-center gap-3">
+        <div id="userAvatar" class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600">
+          C
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs text-gray-500">Welcome</div>
+          <div class="text-lg font-extrabold truncate" id="custName">—</div>
+          <div class="text-xs text-gray-500 mt-0.5 truncate" id="shopName">—</div>
+        </div>
+      </div>
+      <button id="logoutBtn" class="mt-3 w-full text-xs text-red-600 underline">
+        Logout
+      </button>
     </div>
 
     <div class="grid grid-cols-2 gap-3">
       <div class="bg-white rounded-2xl p-4 shadow-sm">
-        <div class="text-[10px] text-gray-500">Pending Due</div>
+        <div class="text-[10px] text-gray-500 font-semibold">PENDING DUE</div>
         <div class="text-xl font-extrabold text-red-600 mt-1" id="dueAmt">₹0</div>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm">
-        <div class="text-[10px] text-gray-500">Loyalty Points</div>
+        <div class="text-[10px] text-gray-500 font-semibold">LOYALTY POINTS</div>
         <div class="text-xl font-extrabold text-purple-600 mt-1" id="loyaltyPts">0</div>
       </div>
     </div>
@@ -65,126 +171,410 @@
   </div>
 </div>
 
-<!-- Firebase SDKs -->
+<!-- Firebase SDK -->
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
 <script>
 (function() {
   'use strict';
 
-  // Helper functions
+  const $ = id => document.getElementById(id);
+  const allPanels = ['phonePanel','authPanel','shopSelector','dashPanel'];
+  function showPanel(id) {
+    allPanels.forEach(p => $(p).classList.toggle('hide', p !== id));
+    window.scrollTo({ top: 0 });
+  }
   function fmtDate(iso) {
     if (!iso) return '';
     const d = iso.toDate ? iso.toDate() : new Date(iso);
     return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
   }
+  function normalizePhone(raw) {
+    let p = String(raw || '').replace(/\D/g, '');
+    if (p.startsWith('880') && p.length === 13) p = '0' + p.slice(3);
+    if (p.startsWith('88') && p.length === 12) p = '0' + p.slice(2);
+    if (p.startsWith('91') && p.length === 12) p = p.slice(2);
+    return p;
+  }
 
-  // Check Firebase config
+  /* ── Config check ── */
   if (!window.FIREBASE_CONFIG) {
-    document.getElementById('loginErr').textContent = 'firebase-config.js not loaded';
-    document.getElementById('loginBtn').disabled = true;
+    $('phoneErr').textContent = 'firebase-config.js not loaded';
     return;
   }
   if (window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
-    document.getElementById('loginErr').textContent = 'Firebase config not set. Update firebase-config.js';
-    document.getElementById('loginBtn').disabled = true;
+    $('phoneErr').textContent = 'Firebase config not set';
     return;
   }
 
-  // Init Firebase
+  /* ── Init ── */
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
+  const auth = firebase.auth();
 
-  document.getElementById('loginBtn').addEventListener('click', async () => {
-    const shopId = document.getElementById('inpShop').value.trim().toUpperCase();
-    const phone = document.getElementById('inpPhone').value.replace(/\D/g,'');
-    document.getElementById('loginErr').textContent = '';
+  // Save verified phone here
+  let verifiedPhone = null;
+  // Save found shops here
+  let foundShops = {}; // shopId → { shopId, customerId, data }
 
-    if (!shopId || !phone) {
-      document.getElementById('loginErr').textContent = 'Enter Shop ID and phone';
+  /* ═══════════════════════════════════════════
+     STEP 1: PHONE CHECK
+     ═══════════════════════════════════════════ */
+  $('phoneContinueBtn').addEventListener('click', async () => {
+    const phone = normalizePhone($('inpPhone').value);
+    $('phoneErr').textContent = '';
+
+    if (!phone || phone.length < 10) {
+      $('phoneErr').textContent = 'Enter a valid phone number';
       return;
     }
 
-    const btn = document.getElementById('loginBtn');
+    const btn = $('phoneContinueBtn');
     btn.disabled = true;
-    btn.textContent = 'Loading...';
+    btn.innerHTML = '<span class="spin">⏳</span> Checking...';
 
     try {
-      // Find shop
-      const shopDoc = await db.collection('shops').doc(shopId).get();
-      if (!shopDoc.exists) {
-        document.getElementById('loginErr').textContent = 'Shop not found';
+      // Search ALL shops for this phone
+      const snap = await db.collectionGroup('customers')
+        .where('phone', '==', phone)
+        .limit(20)
+        .get();
+
+      if (snap.empty) {
+        $('phoneErr').textContent = 'This phone is not registered with any shop';
+        setTimeout(() => {
+          if ($('phoneErr').textContent.includes('not registered')) {
+            $('phoneErr').textContent = 'Ask the shop to save your phone number, then try again.';
+          }
+        }, 2500);
         return;
       }
 
-      // Find customer by phone
-      const custSnap = await db.collection('shops').doc(shopId).collection('customers')
-        .where('phone', '==', phone).limit(1).get();
-      if (custSnap.empty) {
-        document.getElementById('loginErr').textContent = 'No customer with this phone';
-        return;
-      }
+      // Group by shop
+      foundShops = {};
+      snap.docs.forEach(doc => {
+        const pathParts = doc.ref.path.split('/'); // shops/{shopId}/customers/{custId}
+        const shopId = pathParts[1];
+        if (!foundShops[shopId]) {
+          foundShops[shopId] = { shopId, customerId: doc.id, data: doc.data() };
+        }
+      });
 
-      const cust = { id: custSnap.docs[0].id, ...custSnap.docs[0].data() };
-
-      // Show dashboard
-      document.getElementById('loginPanel').classList.add('hide');
-      document.getElementById('dashPanel').classList.remove('hide');
-      document.getElementById('custName').textContent = cust.name || 'Customer';
-      document.getElementById('shopName').textContent = shopDoc.data().shopName || 'Shop';
-      document.getElementById('dueAmt').textContent = '₹' + Number(cust.due || 0).toFixed(2);
-      document.getElementById('loyaltyPts').textContent = String(cust.loyaltyPoints || 0);
-
-      // Load recent invoices
-      try {
-        const salesSnap = await db.collection('shops').doc(shopId).collection('sales')
-          .where('customerId', '==', cust.id).orderBy('saleDate', 'desc').limit(20).get();
-        const sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        document.getElementById('invoiceList').innerHTML = sales.length ? sales.map(s => `
-          <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2.5 text-xs">
-            <div>
-              <div class="font-semibold font-mono">${s.invoiceNo}</div>
-              <div class="text-[10px] text-gray-500">${fmtDate(s.saleDate)}</div>
-            </div>
-            <div class="text-right">
-              <div class="font-bold">₹${Number(s.total||0).toFixed(2)}</div>
-              ${(+s.due||0)>0 ? `<div class="text-[10px] text-red-600">Due ₹${Number(s.due).toFixed(2)}</div>` : `<div class="text-[10px] text-green-600">Paid</div>`}
-            </div>
-          </div>
-        `).join('') : '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
-      } catch (e) {
-        console.warn('Invoice load failed:', e);
-        document.getElementById('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">Could not load invoices</div>';
-      }
-
-      localStorage.setItem('tp_portal', JSON.stringify({ shopId, custId: cust.id, phone }));
-
-      document.getElementById('logoutBtn').onclick = () => {
-        localStorage.removeItem('tp_portal');
-        location.reload();
-      };
+      verifiedPhone = phone;
+      $('verifiedPhone').textContent = phone;
+      showPanel('authPanel');
 
     } catch (e) {
-      console.error(e);
-      document.getElementById('loginErr').textContent = e.message || 'Login failed';
+      console.error('Phone check error:', e);
+      if (e.message && e.message.toLowerCase().includes('index')) {
+        $('phoneErr').textContent = 'Setup incomplete — ask developer to create index';
+        console.error('📌 Create collection group index for "customers.phone"');
+      } else {
+        $('phoneErr').textContent = e.message || 'Search failed';
+      }
     } finally {
       btn.disabled = false;
-      btn.textContent = 'View My Account';
+      btn.textContent = 'Continue →';
     }
   });
 
-  // Auto-login
-  try {
-    const saved = JSON.parse(localStorage.getItem('tp_portal') || 'null');
-    if (saved && saved.shopId && saved.phone) {
-      document.getElementById('inpShop').value = saved.shopId;
-      document.getElementById('inpPhone').value = saved.phone;
-      setTimeout(() => document.getElementById('loginBtn').click(), 200);
+  /* ═══════════════════════════════════════════
+     TAB SWITCHING
+     ═══════════════════════════════════════════ */
+  $('tabLogin').onclick = () => {
+    $('tabLogin').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600';
+    $('tabRegister').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500';
+    $('emailLoginForm').classList.remove('hide');
+    $('emailRegisterForm').classList.add('hide');
+    $('authErr').textContent = '';
+  };
+  $('tabRegister').onclick = () => {
+    $('tabRegister').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600';
+    $('tabLogin').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500';
+    $('emailRegisterForm').classList.remove('hide');
+    $('emailLoginForm').classList.add('hide');
+    $('authErr').textContent = '';
+  };
+
+  /* ═══════════════════════════════════════════
+     GOOGLE SIGN-IN
+     ═══════════════════════════════════════════ */
+  $('googleBtn').addEventListener('click', async () => {
+    $('authErr').textContent = '';
+    const btn = $('googleBtn');
+    btn.disabled = true;
+
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await auth.signInWithPopup(provider);
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      console.error('Google sign-in error:', e);
+      let msg = 'Google sign-in failed';
+      if (e.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled';
+      if (e.code === 'auth/popup-blocked') msg = 'Popup blocked — allow popups and retry';
+      if (e.code === 'auth/operation-not-allowed') msg = 'Google sign-in not enabled in Firebase Console';
+      $('authErr').textContent = msg;
+      btn.disabled = false;
     }
-  } catch(e) {}
+  });
+
+  /* ═══════════════════════════════════════════
+     EMAIL LOGIN
+     ═══════════════════════════════════════════ */
+  $('emailLoginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('authErr').textContent = '';
+    const email = $('loginEmail').value.trim().toLowerCase();
+    const pass = $('loginPass').value;
+
+    if (!email || !pass) { $('authErr').textContent = 'Enter email and password'; return; }
+
+    const btn = $('loginEmailBtn');
+    btn.disabled = true; btn.textContent = 'Logging in...';
+
+    try {
+      await auth.signInWithEmailAndPassword(email, pass);
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      console.error('Login error:', e);
+      let msg = 'Login failed';
+      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) {
+        msg = 'Invalid email or password';
+      }
+      if (e.code === 'auth/too-many-requests') msg = 'Too many attempts — try later';
+      $('authErr').textContent = msg;
+      btn.disabled = false; btn.textContent = 'Login';
+    }
+  });
+
+  /* ═══════════════════════════════════════════
+     EMAIL REGISTER
+     ═══════════════════════════════════════════ */
+  $('emailRegisterForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('authErr').textContent = '';
+    const email = $('regEmail').value.trim().toLowerCase();
+    const pass = $('regPass').value;
+    const pass2 = $('regPass2').value;
+
+    if (!email) { $('authErr').textContent = 'Enter email'; return; }
+    if (pass.length < 6) { $('authErr').textContent = 'Password min 6 chars'; return; }
+    if (pass !== pass2) { $('authErr').textContent = 'Passwords do not match'; return; }
+
+    const btn = $('registerEmailBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+
+    try {
+      await auth.createUserWithEmailAndPassword(email, pass);
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      console.error('Register error:', e);
+      let msg = 'Registration failed';
+      if (e.code === 'auth/email-already-in-use') msg = 'This email is already registered — try Login';
+      if (e.code === 'auth/invalid-email') msg = 'Invalid email format';
+      if (e.code === 'auth/weak-password') msg = 'Password is too weak';
+      $('authErr').textContent = msg;
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
+
+  /* ═══════════════════════════════════════════
+     BACK BUTTONS
+     ═══════════════════════════════════════════ */
+  $('backToPhone').onclick = async () => {
+    try { await auth.signOut(); } catch (e) {}
+    verifiedPhone = null;
+    foundShops = {};
+    $('inpPhone').value = '';
+    $('phoneErr').textContent = '';
+    $('authErr').textContent = '';
+    $('loginEmail').value = ''; $('loginPass').value = '';
+    $('regEmail').value = ''; $('regPass').value = ''; $('regPass2').value = '';
+    showPanel('phonePanel');
+  };
+
+  $('backToAuth').onclick = () => {
+    showPanel('authPanel');
+  };
+
+  /* ═══════════════════════════════════════════
+     AUTH STATE — after successful sign-in
+     ═══════════════════════════════════════════ */
+  auth.onAuthStateChanged(async user => {
+    if (!user) {
+      // Not signed in — show phone panel
+      showPanel('phonePanel');
+      return;
+    }
+
+    // Signed in — but did they verify phone in this session?
+    if (!verifiedPhone) {
+      // Try to restore from localStorage
+      const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
+      if (saved && saved.phone) {
+        verifiedPhone = saved.phone;
+        // Re-check phone exists
+        try {
+          const snap = await db.collectionGroup('customers')
+            .where('phone', '==', verifiedPhone).limit(20).get();
+          if (snap.empty) {
+            await auth.signOut();
+            $('phoneErr').textContent = 'Your phone is no longer registered';
+            showPanel('phonePanel');
+            return;
+          }
+          foundShops = {};
+          snap.docs.forEach(doc => {
+            const shopId = doc.ref.path.split('/')[1];
+            if (!foundShops[shopId]) {
+              foundShops[shopId] = { shopId, customerId: doc.id, data: doc.data() };
+            }
+          });
+        } catch (e) {
+          await auth.signOut();
+          showPanel('phonePanel');
+          return;
+        }
+      } else {
+        // No phone verified — user signed in directly, send them to phone panel
+        showPanel('phonePanel');
+        return;
+      }
+    }
+
+    // Save session for auto-login
+    localStorage.setItem('tp_portal_session', JSON.stringify({
+      phone: verifiedPhone,
+      uid: user.uid,
+      email: user.email || '',
+    }));
+
+    // Decide: single shop or multi-shop
+    const shopIds = Object.keys(foundShops);
+    if (shopIds.length === 1) {
+      await loadDashboard(foundShops[shopIds[0]], user);
+    } else if (shopIds.length > 1) {
+      await showShopSelector(user);
+    } else {
+      // No shops found
+      await auth.signOut();
+      $('phoneErr').textContent = 'Phone not found';
+      showPanel('phonePanel');
+    }
+  });
+
+  /* ═══════════════════════════════════════════
+     MULTI-SHOP SELECTOR
+     ═══════════════════════════════════════════ */
+  async function showShopSelector(user) {
+    const listEl = $('shopList');
+    listEl.innerHTML = '';
+
+    for (const shopId of Object.keys(foundShops)) {
+      const entry = foundShops[shopId];
+      let shopName = shopId;
+      try {
+        const doc = await db.collection('shops').doc(shopId).get();
+        if (doc.exists) shopName = doc.data().shopName || shopId;
+      } catch (e) {}
+
+      const btn = document.createElement('button');
+      btn.className = 'w-full text-left bg-gray-50 hover:bg-blue-50 border-2 border-gray-200 hover:border-blue-300 rounded-xl p-3 transition active:scale-[.98]';
+      btn.innerHTML = `
+        <div class="font-semibold text-sm">${shopName}</div>
+        <div class="text-[10px] text-gray-500 font-mono mt-0.5">${shopId}</div>
+        <div class="text-[10px] text-gray-400 mt-0.5">${entry.data.name || 'Customer'}</div>
+      `;
+      btn.onclick = () => loadDashboard(entry, user);
+      listEl.appendChild(btn);
+    }
+
+    showPanel('shopSelector');
+  }
+
+  /* ═══════════════════════════════════════════
+     LOAD DASHBOARD
+     ═══════════════════════════════════════════ */
+  async function loadDashboard(entry, user) {
+    const shopId = entry.shopId;
+    const cust = { id: entry.customerId, ...entry.data };
+
+    try {
+      const shopDoc = await db.collection('shops').doc(shopId).get();
+      const shopName = shopDoc.exists ? (shopDoc.data().shopName || 'Shop') : 'Shop';
+
+      // Fill dashboard
+      $('custName').textContent = cust.name || 'Customer';
+      $('shopName').textContent = shopName;
+      $('dueAmt').textContent = '₹' + Number(cust.due || 0).toFixed(2);
+      $('loyaltyPts').textContent = String(cust.loyaltyPoints || 0);
+      $('userAvatar').textContent = (cust.name || 'C').charAt(0).toUpperCase();
+
+      // Load invoices
+      try {
+        const salesSnap = await db.collection('shops').doc(shopId).collection('sales')
+          .where('customerId', '==', cust.id)
+          .orderBy('saleDate', 'desc')
+          .limit(20).get();
+        const sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        $('invoiceList').innerHTML = sales.length
+          ? sales.map(s => `
+            <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2.5 text-xs">
+              <div>
+                <div class="font-semibold font-mono">${s.invoiceNo}</div>
+                <div class="text-[10px] text-gray-500">${fmtDate(s.saleDate)}</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold">₹${Number(s.total||0).toFixed(2)}</div>
+                ${(+s.due||0)>0
+                  ? `<div class="text-[10px] text-red-600">Due ₹${Number(s.due).toFixed(2)}</div>`
+                  : `<div class="text-[10px] text-green-600">Paid</div>`}
+              </div>
+            </div>`).join('')
+          : '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
+      } catch (e) {
+        console.warn('Invoices failed:', e);
+        $('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">Could not load invoices</div>';
+      }
+
+      // Save current shop for auto-login
+      localStorage.setItem('tp_portal_current', JSON.stringify({ shopId, custId: cust.id }));
+
+      $('logoutBtn').onclick = async () => {
+        localStorage.removeItem('tp_portal_session');
+        localStorage.removeItem('tp_portal_current');
+        try { await auth.signOut(); } catch (e) {}
+        location.reload();
+      };
+
+      showPanel('dashPanel');
+
+    } catch (e) {
+      console.error('Dashboard error:', e);
+      $('authErr').textContent = 'Could not load dashboard';
+      showPanel('authPanel');
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     BOOT — try to restore session
+     ═══════════════════════════════════════════ */
+  (async function boot() {
+    // Check for saved session
+    const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
+    if (!saved || !saved.phone) {
+      showPanel('phonePanel');
+      return;
+    }
+    // onAuthStateChanged will handle restoration
+    // If not signed in, it'll show phone panel
+  })();
 
 })();
 </script>
