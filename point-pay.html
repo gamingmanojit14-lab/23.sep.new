@@ -16,6 +16,11 @@
   .pulse{ animation:pulse 1.5s infinite; }
   .spin{ display:inline-block; animation:spin 1s linear infinite; }
   @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  .pin-box{ width:58px;height:68px;background:#1e293b;border:2px solid #475569;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;transition:all .15s; }
+  .pin-box.active{ border-color:#a855f7; }
+  .pin-box.filled{ border-color:#a855f7;background:#312e81; }
+  .pin-input-hidden{ position:absolute;opacity:0;pointer-events:none;left:-9999px; }
 </style>
 </head>
 <body>
@@ -27,7 +32,6 @@
     <div class="text-center">
       <div class="text-6xl mb-3">⭐</div>
       <div class="text-lg font-bold">Loading...</div>
-      <div class="text-xs text-slate-400 mt-2">Preparing points payment</div>
     </div>
   </div>
 
@@ -40,13 +44,72 @@
     </div>
   </div>
 
-  <!-- ⭐ IDENTITY VERIFICATION (for open payer OR customer-specific) -->
+  <!-- LOGIN -->
+  <div id="loginView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999] overflow-y-auto">
+    <div class="max-w-md w-full my-auto">
+      <div class="text-center mb-6">
+        <div class="text-6xl mb-3">🔐</div>
+        <h1 class="text-2xl font-extrabold text-white mb-2">Sign In</h1>
+        <p class="text-slate-400 text-sm" id="loginShopName">—</p>
+        <p class="text-slate-500 text-xs mt-1">Only needed first time in this browser</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-400/40 rounded-2xl p-4 mb-4">
+        <div class="text-center">
+          <div class="text-xs text-slate-300">Bill Total</div>
+          <div class="text-3xl font-extrabold text-white" id="loginBillTotal">₹0</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+        <div class="flex bg-slate-900 rounded-xl p-1 mb-4">
+          <button id="tabLoginBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-purple-600 text-white">Login</button>
+          <button id="tabRegisterBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-slate-400">Register</button>
+        </div>
+
+        <div id="loginFormBox">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Gmail Address</label>
+          <input id="loginEmail" type="email" placeholder="you@gmail.com" autocomplete="email"
+            class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white mb-3">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Password</label>
+          <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password"
+            class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white mb-4">
+          <button id="loginBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-extrabold active:scale-[.98] transition">
+            🔓 Login
+          </button>
+        </div>
+
+        <div id="registerFormBox" class="hide">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Gmail Address</label>
+          <input id="regEmail" type="email" placeholder="you@gmail.com" autocomplete="email"
+            class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white mb-3">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Password (min 6 chars)</label>
+          <input id="regPass" type="password" placeholder="Password" autocomplete="new-password" minlength="6"
+            class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white mb-3">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Confirm Password</label>
+          <input id="regPass2" type="password" placeholder="Confirm password" autocomplete="new-password" minlength="6"
+            class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white mb-4">
+          <button id="registerBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-extrabold active:scale-[.98] transition">
+            ✨ Create Account
+          </button>
+        </div>
+
+        <p id="loginErr" class="text-xs text-red-400 mt-3 text-center min-h-[16px]"></p>
+      </div>
+
+      <p class="text-[10px] text-slate-500 text-center mt-4">
+        🔒 Session will be saved in this browser
+      </p>
+    </div>
+  </div>
+
+  <!-- VERIFY -->
   <div id="verifyView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999] overflow-y-auto">
     <div class="max-w-md w-full my-auto">
       <div class="text-center mb-6">
-        <div class="text-6xl mb-3">🔒</div>
-        <h1 class="text-2xl font-extrabold text-white mb-2">Verify Identity</h1>
-        <p class="text-slate-400 text-sm" id="verifySubtitle">Enter your Help ID and phone to pay</p>
+        <div class="text-6xl mb-3">🆔</div>
+        <h1 class="text-2xl font-extrabold text-white mb-2">Verify Your Identity</h1>
+        <p class="text-slate-400 text-sm">Enter your Help ID and phone number</p>
       </div>
 
       <div class="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-400/40 rounded-2xl p-4 mb-4">
@@ -61,29 +124,71 @@
         <label class="block text-xs font-bold text-slate-300 mb-2">Your Help ID</label>
         <input id="helpIdInput" placeholder="C-XXXXXX" autocomplete="off"
           class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white text-center font-mono tracking-widest text-lg uppercase mb-3">
-
         <label class="block text-xs font-bold text-slate-300 mb-2">Your Phone Number</label>
         <input id="phoneInput" type="tel" inputmode="numeric" placeholder="Registered phone" autocomplete="off"
           class="w-full px-4 py-3 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white text-center font-mono tracking-wider text-lg">
-
         <button id="verifyBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-extrabold mt-4 active:scale-[.98] transition">
           🔓 Verify &amp; Continue
         </button>
         <p id="verifyErr" class="text-xs text-red-400 mt-3 text-center min-h-[16px]"></p>
-        <p class="text-[10px] text-slate-500 text-center mt-1">
-          Attempts: <span id="attemptCount">0</span>/3
-        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE PIN -->
+  <div id="createPinView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999] overflow-y-auto">
+    <div class="max-w-md w-full my-auto">
+      <div class="text-center mb-6">
+        <div class="text-6xl mb-3">🔐</div>
+        <h1 class="text-2xl font-extrabold text-white mb-2">Create Payment PIN</h1>
+        <p class="text-slate-400 text-sm">Set a 4-digit PIN to protect your points</p>
       </div>
 
-      <p class="text-[10px] text-slate-500 text-center mt-4">
-        🔐 Only you can pay from your own points wallet
-      </p>
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+        <label class="block text-xs font-bold text-slate-300 mb-2">New 4-Digit PIN</label>
+        <input id="newPin1" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"
+          class="w-full px-4 py-4 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white text-center font-mono text-2xl tracking-[0.5em] mb-3">
+        <label class="block text-xs font-bold text-slate-300 mb-2">Confirm PIN</label>
+        <input id="newPin2" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"
+          class="w-full px-4 py-4 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-white text-center font-mono text-2xl tracking-[0.5em] mb-4">
+        <button id="createPinBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-extrabold active:scale-[.98] transition">
+          ✓ Set PIN
+        </button>
+        <p id="createPinErr" class="text-xs text-red-400 mt-3 text-center min-h-[16px]"></p>
+        <p class="text-[10px] text-slate-500 text-center mt-2">
+          You can change this later from your Customer Portal
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN ENTRY -->
+  <div id="pinView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999] overflow-y-auto">
+    <div class="max-w-md w-full my-auto">
+      <div class="text-center mb-6">
+        <div class="text-6xl mb-3">🔐</div>
+        <h1 class="text-2xl font-extrabold text-white mb-2">Enter Payment PIN</h1>
+        <p class="text-slate-400 text-sm">Paying as <b id="payerNameDisplay" class="text-purple-300">—</b></p>
+      </div>
+
+      <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+        <div class="flex justify-center gap-3 mb-6" onclick="document.getElementById('pinInput').focus()">
+          <div class="pin-box" id="pinBox0"></div>
+          <div class="pin-box" id="pinBox1"></div>
+          <div class="pin-box" id="pinBox2"></div>
+          <div class="pin-box" id="pinBox3"></div>
+        </div>
+        <input id="pinInput" type="tel" inputmode="numeric" maxlength="4" class="pin-input-hidden">
+        <p id="pinErr" class="text-xs text-red-400 text-center min-h-[16px] mb-2"></p>
+        <p class="text-[10px] text-slate-500 text-center">
+          Forgot PIN? Reset from Customer Portal
+        </p>
+      </div>
     </div>
   </div>
 
   <!-- MAIN -->
   <div id="mainView" class="hide min-h-screen flex flex-col">
-
     <header class="bg-gradient-to-r from-purple-600 to-blue-600 p-4 rounded-2xl shadow-lg mb-3">
       <div class="flex items-center gap-3">
         <div class="text-4xl">⭐</div>
@@ -144,7 +249,6 @@
     <button id="cancelBtn" class="w-full bg-slate-700 text-slate-300 py-3 rounded-xl font-semibold text-sm">
       Cancel
     </button>
-
     <p class="text-[10px] text-slate-500 text-center mt-3">
       Expires in <span id="timer" class="font-bold text-slate-300">5:00</span>
     </p>
@@ -178,14 +282,25 @@
 
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
 <script>
 (function() {
   'use strict';
-
   const $ = id => document.getElementById(id);
   const q = s => document.querySelector(s);
+
+  let request = null;
+  let payerCustomer = null;
+  let currentUser = null;
+  let stage = 'boot';
+  let pinAttempts = 0;
+  const MAX_PIN_ATTEMPTS = 3;
+  let timerInterval = null;
+  let maxUsable = 0;
+  let reqUnsub = null;
+  let authHandled = false;
 
   function normalizePhone(raw) {
     let p = String(raw || '').replace(/\D/g, '');
@@ -195,169 +310,224 @@
     return p;
   }
 
-  if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
-    $('loadingView').classList.add('hide');
-    $('errorView').classList.remove('hide');
-    $('errTitle').textContent = 'Config Missing';
-    $('errMsg').textContent = 'firebase-config.js needs updating';
-    return;
+  function showView(id) {
+    ['loadingView','errorView','loginView','verifyView','createPinView','pinView','mainView','successView','cancelledView'].forEach(v => {
+      const el = $(v);
+      if (el) el.classList.toggle('hide', v !== id);
+    });
+    window.scrollTo({ top: 0 });
   }
 
+  function showError(title, msg) {
+    $('errTitle').textContent = title;
+    $('errMsg').textContent = msg;
+    showView('errorView');
+  }
+
+  async function hashPin(pin) {
+    const enc = new TextEncoder();
+    const data = enc.encode('tp_pin_v1_' + pin);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
+    setTimeout(() => showError('Config Missing', 'firebase-config.js not set'), 100);
+    return;
+  }
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
+  const auth = firebase.auth();
+  const FV = firebase.firestore.FieldValue;
 
-  const params = new URLSearchParams(location.search);
-  const requestId = params.get('r');
-  if (!requestId) {
-    $('loadingView').classList.add('hide');
-    $('errorView').classList.remove('hide');
-    $('errTitle').textContent = 'Missing Request';
-    $('errMsg').textContent = 'Please scan a valid QR code';
-    return;
-  }
+  // ═══════════════════════════════ BOOT ═══════════════════════════════
+  (async function boot() {
+    const requestId = new URLSearchParams(location.search).get('r');
+    if (!requestId) return showError('Missing Request', 'Please scan a valid QR code');
 
-  let request = null;
-  let reqUnsub = null;
-  let timerInterval = null;
-  let maxUsable = 0;
-  let attempts = 0;
-  const MAX_ATTEMPTS = 3;
-  let verified = false;
-  let payerCustomer = null;      // { id, name, helpId, phone, loyaltyPoints, ... }
-  let mainViewReady = false;
-
-  /* ═══ INIT ═══ */
-  (async function init() {
     try {
       const doc = await db.collection('pointsRequests').doc(requestId).get();
-      if (!doc.exists) return showError('Request Not Found', 'This request has expired or was already used');
-      request = doc.data();
+      if (!doc.exists) return showError('Not Found', 'Request expired or already used');
+      request = { id: doc.id, ...doc.data() };
 
       if (request.status === 'confirmed') {
         $('successPoints').textContent = request.pointsUsed || 0;
         $('successAmount').textContent = request.pointsUsed || 0;
-        $('loadingView').classList.add('hide');
-        $('successView').classList.remove('hide');
-        return;
+        return showView('successView');
       }
-      if (request.status === 'cancelled') {
-        $('loadingView').classList.add('hide');
-        $('cancelledView').classList.remove('hide');
-        return;
-      }
-      if (Date.now() > (request.expiresAt || 0) && request.status === 'pending') {
-        try { await db.collection('pointsRequests').doc(requestId).update({ status: 'expired' }); } catch(e){}
-        return showError('Request Expired', 'Ask the salesman to create a new one');
+      if (request.status === 'cancelled') return showView('cancelledView');
+      if (request.status === 'expired' || Date.now() > (request.expiresAt || 0)) {
+        try { await db.collection('pointsRequests').doc(requestId).update({ status: 'expired' }); } catch {}
+        return showError('Request Expired', 'Ask the salesman for a new QR');
       }
 
-      // Load shop name
       try {
         const shopDoc = await db.collection('shops').doc(request.shopId).get();
         const shopName = shopDoc.exists ? (shopDoc.data().shopName || request.shopId) : request.shopId;
         $('shopName').textContent = shopName;
         $('verifyShopName').textContent = shopName;
-      } catch (e) {
-        $('shopName').textContent = request.shopId || 'Shop';
-        $('verifyShopName').textContent = request.shopId || 'Shop';
-      }
+        $('loginShopName').textContent = shopName;
+      } catch (e) {}
 
-      $('verifyBillTotal').textContent = '₹' + Number(request.billTotal || 0).toFixed(2);
+      const billTotalText = '₹' + Number(request.billTotal || 0).toFixed(2);
+      $('verifyBillTotal').textContent = billTotalText;
+      $('loginBillTotal').textContent = billTotalText;
 
-      // Always verify identity — whether open-payer or specific customer
-      showVerifyView();
-
-      // Watch external cancel
       reqUnsub = db.collection('pointsRequests').doc(requestId).onSnapshot(snap => {
         if (!snap.exists) return;
         const d = snap.data();
-        if (d.status === 'cancelled' && !$('mainView').classList.contains('hide')) {
-          if (reqUnsub) reqUnsub();
+        if (d.status === 'cancelled' && stage !== 'success' && stage !== 'cancelled') {
           if (timerInterval) clearInterval(timerInterval);
-          $('mainView').classList.add('hide');
-          $('verifyView').classList.add('hide');
-          $('cancelledView').classList.remove('hide');
+          stage = 'cancelled';
+          showView('cancelledView');
         }
       });
+
+      auth.onAuthStateChanged(handleAuthChange);
+
     } catch (e) {
-      console.error('Init error:', e);
+      console.error(e);
       showError('Error', e.message || 'Could not load request');
     }
   })();
 
-  function showError(title, msg) {
-    $('loadingView').classList.add('hide');
-    $('verifyView').classList.add('hide');
-    $('mainView').classList.add('hide');
-    $('errorView').classList.remove('hide');
-    $('errTitle').textContent = title;
-    $('errMsg').textContent = msg;
+  function handleAuthChange(user) {
+    currentUser = user;
+
+    if (user) {
+      try {
+        localStorage.setItem('tp_pointpay_auth', JSON.stringify({
+          uid: user.uid, email: user.email, cachedAt: Date.now(),
+        }));
+      } catch (e) {}
+
+      if (!authHandled) {
+        authHandled = true;
+        goToVerify();
+      } else if (stage === 'login') {
+        goToVerify();
+      }
+    } else {
+      try { localStorage.removeItem('tp_pointpay_auth'); } catch (e) {}
+      if (!authHandled) {
+        authHandled = true;
+        stage = 'login';
+        showView('loginView');
+      } else if (stage === 'verify' || stage === 'pin' || stage === 'createPin' || stage === 'main') {
+        stage = 'login';
+        showView('loginView');
+      }
+    }
   }
 
-  function showVerifyView() {
-    $('loadingView').classList.add('hide');
-    $('verifyView').classList.remove('hide');
-    setTimeout(() => $('helpIdInput').focus(), 200);
+  function goToVerify() {
+    stage = 'verify';
+    showView('verifyView');
+    setTimeout(() => $('helpIdInput').focus(), 250);
   }
 
-  /* ═══ VERIFY IDENTITY ═══ */
+  // ═══════════════════════════════ LOGIN ═══════════════════════════════
+  function switchAuthTab(tab) {
+    if (tab === 'login') {
+      $('tabLoginBtn').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-purple-600 text-white';
+      $('tabRegisterBtn').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-slate-400';
+      $('loginFormBox').classList.remove('hide');
+      $('registerFormBox').classList.add('hide');
+    } else {
+      $('tabRegisterBtn').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold bg-purple-600 text-white';
+      $('tabLoginBtn').className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold text-slate-400';
+      $('registerFormBox').classList.remove('hide');
+      $('loginFormBox').classList.add('hide');
+    }
+    $('loginErr').textContent = '';
+  }
+  $('tabLoginBtn').onclick = () => switchAuthTab('login');
+  $('tabRegisterBtn').onclick = () => switchAuthTab('register');
+
+  $('loginBtn').onclick = async () => {
+    const email = $('loginEmail').value.trim().toLowerCase();
+    const pass = $('loginPass').value;
+    $('loginErr').textContent = '';
+    if (!email || !pass) { $('loginErr').textContent = 'Enter email and password'; return; }
+
+    const btn = $('loginBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin">⏳</span> Logging in...';
+
+    try {
+      await auth.signInWithEmailAndPassword(email, pass);
+    } catch (e) {
+      let msg = 'Login failed';
+      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Invalid email or password';
+      if (e.code === 'auth/too-many-requests') msg = 'Too many attempts. Try later.';
+      $('loginErr').textContent = msg;
+      btn.disabled = false;
+      btn.textContent = '🔓 Login';
+    }
+  };
+
+  $('registerBtn').onclick = async () => {
+    const email = $('regEmail').value.trim().toLowerCase();
+    const pass = $('regPass').value;
+    const pass2 = $('regPass2').value;
+    $('loginErr').textContent = '';
+
+    if (!email) { $('loginErr').textContent = 'Enter email'; return; }
+    if (pass.length < 6) { $('loginErr').textContent = 'Password min 6 chars'; return; }
+    if (pass !== pass2) { $('loginErr').textContent = 'Passwords do not match'; return; }
+
+    const btn = $('registerBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    try {
+      await auth.createUserWithEmailAndPassword(email, pass);
+    } catch (e) {
+      let msg = 'Registration failed';
+      if (e.code === 'auth/email-already-in-use') msg = 'Email already registered';
+      if (e.code === 'auth/weak-password') msg = 'Password too weak';
+      if (e.code === 'auth/invalid-email') msg = 'Invalid email';
+      $('loginErr').textContent = msg;
+      btn.disabled = false;
+      btn.textContent = '✨ Create Account';
+    }
+  };
+
+  // ═══════════════════════════════ VERIFY ═══════════════════════════════
   $('helpIdInput').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
 
-  $('verifyBtn').addEventListener('click', async () => {
-    if (attempts >= MAX_ATTEMPTS) return;
-    $('verifyErr').textContent = '';
-
+  $('verifyBtn').onclick = async () => {
     const helpId = $('helpIdInput').value.trim().toUpperCase();
     const phone = normalizePhone($('phoneInput').value);
+    $('verifyErr').textContent = '';
 
-    if (!helpId || !helpId.startsWith('C-')) {
-      $('verifyErr').textContent = 'Enter a valid Help ID (e.g. C-A3K9Q7)';
-      return;
-    }
-    if (!phone || phone.length < 10) {
-      $('verifyErr').textContent = 'Enter a valid phone number';
-      return;
-    }
+    if (!helpId || !helpId.startsWith('C-')) { $('verifyErr').textContent = 'Enter a valid Help ID'; return; }
+    if (!phone || phone.length < 10) { $('verifyErr').textContent = 'Enter a valid phone number'; return; }
 
     const btn = $('verifyBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spin">⏳</span> Verifying...';
 
     try {
-      // Lookup Help ID
       const codeDoc = await db.collection('customerCodes').doc(helpId).get();
       if (!codeDoc.exists) {
-        attempts++;
-        $('attemptCount').textContent = attempts;
         $('verifyErr').textContent = 'Help ID not found';
-        if (attempts >= MAX_ATTEMPTS) return lockout();
         btn.disabled = false; btn.textContent = '🔓 Verify & Continue';
         return;
       }
-
       const codeData = codeDoc.data();
 
-      // Phone must match
-      const savedPhone = normalizePhone(codeData.phone || '');
-      if (savedPhone !== phone) {
-        attempts++;
-        $('attemptCount').textContent = attempts;
+      if (normalizePhone(codeData.phone || '') !== phone) {
         $('verifyErr').textContent = 'Phone does not match this Help ID';
-        if (attempts >= MAX_ATTEMPTS) return lockout();
         btn.disabled = false; btn.textContent = '🔓 Verify & Continue';
         return;
       }
-
-      // Must be same shop
       if (codeData.shopId !== request.shopId) {
-        attempts++;
-        $('attemptCount').textContent = attempts;
-        $('verifyErr').textContent = 'This Help ID belongs to a different shop';
-        if (attempts >= MAX_ATTEMPTS) return lockout();
+        $('verifyErr').textContent = 'Help ID belongs to a different shop';
         btn.disabled = false; btn.textContent = '🔓 Verify & Continue';
         return;
       }
 
-      // Load customer from this shop
       const custDoc = await db.collection('shops').doc(request.shopId)
         .collection('customers').doc(codeData.customerId).get();
       if (!custDoc.exists) {
@@ -368,59 +538,153 @@
 
       const customer = custDoc.data();
       const loyaltyPoints = +customer.loyaltyPoints || 0;
-
       if (loyaltyPoints <= 0) {
         $('verifyErr').textContent = 'Your wallet has 0 points';
         btn.disabled = false; btn.textContent = '🔓 Verify & Continue';
         return;
       }
 
-      // ✓ Verified
       payerCustomer = {
         id: codeData.customerId,
         name: customer.name || 'Customer',
         helpId: helpId,
         phone: phone,
         loyaltyPoints: loyaltyPoints,
+        paymentPin: customer.paymentPin || null,
       };
-      verified = true;
-      startMainView();
+
+      btn.disabled = false;
+      btn.textContent = '🔓 Verify & Continue';
+
+      if (!payerCustomer.paymentPin) goToCreatePin();
+      else goToPinEntry();
 
     } catch (e) {
-      console.error('Verify error:', e);
+      console.error(e);
       $('verifyErr').textContent = e.message || 'Verification failed';
       btn.disabled = false; btn.textContent = '🔓 Verify & Continue';
     }
-  });
+  };
 
-  $('phoneInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') $('verifyBtn').click();
-  });
+  $('phoneInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('verifyBtn').click(); });
 
-  async function lockout() {
-    $('verifyBtn').disabled = true;
-    $('verifyBtn').textContent = '🚫 Locked';
-    $('verifyErr').textContent = 'Too many failed attempts. Ask the shop for a new request.';
-    try {
-      await db.collection('pointsRequests').doc(requestId).update({
-        status: 'cancelled',
-        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-    } catch(e) { console.warn(e); }
-    setTimeout(() => {
-      $('verifyView').classList.add('hide');
-      $('cancelledView').classList.remove('hide');
-    }, 1500);
+  // ═══════════════════════════════ CREATE PIN ═══════════════════════════════
+  function goToCreatePin() {
+    stage = 'createPin';
+    $('newPin1').value = '';
+    $('newPin2').value = '';
+    $('createPinErr').textContent = '';
+    $('createPinBtn').disabled = false;
+    $('createPinBtn').textContent = '✓ Set PIN';
+    showView('createPinView');
+    setTimeout(() => $('newPin1').focus(), 250);
   }
 
-  /* ═══ MAIN VIEW ═══ */
-  function startMainView() {
-    if (mainViewReady) return;
-    mainViewReady = true;
+  $('newPin1').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+  $('newPin2').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
 
-    // Calculate max usable based on THIS payer's wallet
+  $('createPinBtn').onclick = async () => {
+    const pin1 = $('newPin1').value;
+    const pin2 = $('newPin2').value;
+    $('createPinErr').textContent = '';
+
+    if (!/^\d{4}$/.test(pin1)) { $('createPinErr').textContent = 'PIN must be exactly 4 digits'; return; }
+    if (pin1 !== pin2) { $('createPinErr').textContent = 'PINs do not match'; return; }
+
+    const btn = $('createPinBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const hash = await hashPin(pin1);
+      await db.collection('shops').doc(request.shopId)
+        .collection('customers').doc(payerCustomer.id)
+        .update({
+          paymentPin: hash,
+          paymentPinSetAt: FV.serverTimestamp(),
+        });
+      payerCustomer.paymentPin = hash;
+      goToMain();
+    } catch (e) {
+      console.error(e);
+      $('createPinErr').textContent = e.message || 'Failed to save PIN';
+      btn.disabled = false;
+      btn.textContent = '✓ Set PIN';
+    }
+  };
+
+  // ═══════════════════════════════ PIN ENTRY ═══════════════════════════════
+  function goToPinEntry() {
+    stage = 'pin';
+    pinAttempts = 0;
+    $('payerNameDisplay').textContent = payerCustomer.name;
+    $('pinInput').value = '';
+    $('pinErr').textContent = '';
+    updatePinBoxes();
+    showView('pinView');
+    setTimeout(() => $('pinInput').focus(), 250);
+  }
+
+  function updatePinBoxes() {
+    const val = $('pinInput').value || '';
+    for (let i = 0; i < 4; i++) {
+      const box = $('pinBox' + i);
+      if (!box) continue;
+      if (i < val.length) {
+        box.textContent = '●';
+        box.classList.add('filled');
+        box.classList.remove('active');
+      } else {
+        box.textContent = '';
+        box.classList.remove('filled');
+        if (i === val.length) box.classList.add('active');
+        else box.classList.remove('active');
+      }
+    }
+  }
+
+  $('pinInput').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+    updatePinBoxes();
+    if (e.target.value.length === 4) setTimeout(verifyPin, 200);
+  });
+
+  async function verifyPin() {
+    const entered = $('pinInput').value;
+    if (entered.length !== 4) return;
+
+    const hash = await hashPin(entered);
+
+    if (hash === payerCustomer.paymentPin) {
+      $('pinErr').textContent = '';
+      goToMain();
+    } else {
+      pinAttempts++;
+      if (pinAttempts >= MAX_PIN_ATTEMPTS) {
+        $('pinErr').textContent = 'Too many wrong attempts. Request cancelled.';
+        try {
+          await db.collection('pointsRequests').doc(request.id).update({
+            status: 'cancelled',
+            cancelledAt: FV.serverTimestamp(),
+          });
+        } catch (e) {}
+        stage = 'cancelled';
+        setTimeout(() => showView('cancelledView'), 1500);
+        return;
+      }
+      $('pinErr').textContent = `Wrong PIN. Attempts: ${pinAttempts}/${MAX_PIN_ATTEMPTS}`;
+      $('pinInput').value = '';
+      updatePinBoxes();
+      $('pinInput').focus();
+    }
+  }
+
+  // ═══════════════════════════════ MAIN ═══════════════════════════════
+  function goToMain() {
+    if (stage === 'main') return;
+    stage = 'main';
+
     maxUsable = Math.min(payerCustomer.loyaltyPoints, +request.billTotal || 0);
-
     $('payerName').textContent = payerCustomer.name;
     $('payerHelpId').textContent = payerCustomer.helpId;
     $('billTotal').textContent = '₹' + Number(request.billTotal || 0).toFixed(2);
@@ -448,17 +712,15 @@
     $('confirmBtn').onclick = confirmPayment;
     $('cancelBtn').onclick = cancelPayment;
 
-    $('loadingView').classList.add('hide');
-    $('verifyView').classList.add('hide');
-    $('mainView').classList.remove('hide');
+    showView('mainView');
 
+    if (timerInterval) clearInterval(timerInterval);
     timerInterval = setInterval(() => {
       const left = (request.expiresAt || 0) - Date.now();
       if (left <= 0) {
         clearInterval(timerInterval);
         $('timer').textContent = '0:00';
-        db.collection('pointsRequests').doc(requestId)
-          .update({ status: 'expired' }).catch(() => {});
+        db.collection('pointsRequests').doc(request.id).update({ status: 'expired' }).catch(() => {});
         showError('Request Expired', 'Time ran out. Ask the salesman for a new QR.');
         return;
       }
@@ -494,10 +756,7 @@
     `;
   }
 
-  /* ═══ CONFIRM PAYMENT ═══ */
   async function confirmPayment() {
-    if (!verified || !payerCustomer) { alert('Please verify your identity first'); return; }
-
     const p = Math.floor(+$('pointsInput').value || 0);
     if (p <= 0) { alert('Enter a valid points amount'); return; }
     if (p > maxUsable) { alert('Points exceed maximum'); return; }
@@ -508,13 +767,13 @@
     btn.textContent = 'Confirming...';
 
     try {
-      await db.collection('pointsRequests').doc(requestId).update({
+      await db.collection('pointsRequests').doc(request.id).update({
         status: 'confirmed',
         pointsUsed: p,
         payerCustomerId: payerCustomer.id,
         payerCustomerName: payerCustomer.name,
         payerPhone: payerCustomer.phone,
-        confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        confirmedAt: FV.serverTimestamp(),
       });
 
       if (reqUnsub) { try { reqUnsub(); } catch(e){} }
@@ -522,29 +781,28 @@
 
       $('successPoints').textContent = p;
       $('successAmount').textContent = p;
-      $('mainView').classList.add('hide');
-      $('successView').classList.remove('hide');
+      stage = 'success';
+      showView('successView');
     } catch (e) {
-      console.error('Confirm error:', e);
+      console.error(e);
       btn.disabled = false;
       btn.textContent = '✓ Confirm Points Payment';
       alert('Failed: ' + (e.message || 'Unknown error'));
     }
   }
 
-  /* ═══ CANCEL ═══ */
   async function cancelPayment() {
     if (!confirm('Cancel points payment?')) return;
     try {
-      await db.collection('pointsRequests').doc(requestId).update({
+      await db.collection('pointsRequests').doc(request.id).update({
         status: 'cancelled',
-        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+        cancelledAt: FV.serverTimestamp(),
       });
     } catch (e) { console.error(e); }
     if (reqUnsub) { try { reqUnsub(); } catch(e){} }
     if (timerInterval) clearInterval(timerInterval);
-    $('mainView').classList.add('hide');
-    $('cancelledView').classList.remove('hide');
+    stage = 'cancelled';
+    showView('cancelledView');
   }
 
   window.addEventListener('beforeunload', () => {
