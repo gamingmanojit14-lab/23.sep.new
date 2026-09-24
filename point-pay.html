@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Points Payment — TextilePOS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  body{ font-family:'Inter',system-ui,sans-serif; margin:0; background:#0f172a; color:#fff; }
+  .hide{ display:none !important; }
+  @keyframes pop{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+  .pop{ animation:pop .25s ease; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+  .pulse{ animation:pulse 1.5s infinite; }
+  .spin{ display:inline-block; animation:spin 1s linear infinite; }
+  @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+
+<div class="max-w-md mx-auto min-h-screen p-4">
+
+  <!-- ═══════════════════════════════════════
+       LOADING
+       ═══════════════════════════════════════ -->
+  <div id="loadingView" class="fixed inset-0 flex items-center justify-center z-[999] bg-slate-900">
+    <div class="text-center">
+      <div class="text-6xl mb-3">⭐</div>
+      <div class="text-lg font-bold">Loading...</div>
+      <div class="text-xs text-slate-400 mt-2">Preparing points payment</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       ERROR
+       ═══════════════════════════════════════ -->
+  <div id="errorView" class="hide fixed inset-0 flex items-center justify-center p-4 z-[999] bg-slate-900">
+    <div class="text-center max-w-sm">
+      <div class="text-6xl mb-3">⚠️</div>
+      <h1 id="errTitle" class="text-xl font-extrabold text-red-500 mb-2">Invalid Request</h1>
+      <p id="errMsg" class="text-slate-400 text-sm leading-relaxed"></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MAIN VIEW
+       ═══════════════════════════════════════ -->
+  <div id="mainView" class="hide min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-purple-600 to-blue-600 p-4 rounded-2xl shadow-lg mb-3">
+      <div class="flex items-center gap-3">
+        <div class="text-4xl">⭐</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-lg truncate" id="shopName">—</div>
+          <div class="text-[11px] opacity-90">Points Payment</div>
+        </div>
+        <div class="bg-white/20 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+          <span class="inline-block w-2 h-2 rounded-full bg-green-300 mr-1 pulse"></span>LIVE
+        </div>
+      </div>
+    </header>
+
+    <!-- Bill + Points Card -->
+    <div class="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-400/40 rounded-2xl p-4 mb-3">
+      <div class="text-center mb-3">
+        <div class="text-xs text-slate-300">Bill Total</div>
+        <div class="text-4xl font-extrabold text-white" id="billTotal">₹0</div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-slate-800/60 rounded-lg p-2 text-center">
+          <div class="text-slate-400 text-[10px]">Your Points</div>
+          <div class="font-extrabold text-purple-300 text-lg" id="availPoints">0</div>
+        </div>
+        <div class="bg-slate-800/60 rounded-lg p-2 text-center">
+          <div class="text-slate-400 text-[10px]">Max Usable</div>
+          <div class="font-extrabold text-green-300 text-lg" id="maxUsable">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Points Input -->
+    <div class="bg-slate-800/60 rounded-2xl p-4 mb-3 border border-slate-700">
+      <label class="block text-xs font-bold text-slate-300 mb-2">Points to pay</label>
+      <input id="pointsInput" type="number" min="0" value="0"
+        class="w-full px-4 py-4 bg-slate-900 border-2 border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none text-3xl font-extrabold text-center text-white">
+      <div class="flex gap-2 mt-3">
+        <button data-quick="25" class="flex-1 bg-slate-700 text-white py-2 rounded-lg text-xs font-bold active:scale-95">25%</button>
+        <button data-quick="50" class="flex-1 bg-slate-700 text-white py-2 rounded-lg text-xs font-bold active:scale-95">50%</button>
+        <button data-quick="75" class="flex-1 bg-slate-700 text-white py-2 rounded-lg text-xs font-bold active:scale-95">75%</button>
+        <button data-quick="100" class="flex-1 bg-purple-600 text-white py-2 rounded-lg text-xs font-bold active:scale-95">MAX</button>
+      </div>
+      <div id="summaryBox" class="bg-slate-900/60 rounded-lg p-3 mt-3 text-xs space-y-1"></div>
+    </div>
+
+    <!-- Buttons -->
+    <button id="confirmBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-extrabold shadow-lg active:scale-[.98] transition mb-2">
+      ✓ Confirm Points Payment
+    </button>
+    <button id="cancelBtn" class="w-full bg-slate-700 text-slate-300 py-3 rounded-xl font-semibold text-sm">
+      Cancel
+    </button>
+
+    <p class="text-[10px] text-slate-500 text-center mt-3">
+      Expires in <span id="timer" class="font-bold text-slate-300">5:00</span>
+    </p>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SUCCESS VIEW
+       ═══════════════════════════════════════ -->
+  <div id="successView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999]">
+    <div class="text-center max-w-sm pop">
+      <div class="text-8xl mb-4">✅</div>
+      <h2 class="text-3xl font-extrabold text-green-500 mb-2">Confirmed!</h2>
+      <p class="text-slate-400 text-sm mb-6">Points payment confirmed</p>
+      <div class="bg-slate-800 border border-green-500/40 rounded-2xl p-5">
+        <div class="text-xs text-slate-400">Points Used</div>
+        <div class="text-4xl font-extrabold text-green-400 mt-1" id="successPoints">0</div>
+        <div class="text-xs text-slate-400 mt-1">= ₹<span id="successAmount">0</span></div>
+      </div>
+      <p class="text-xs text-slate-500 mt-6">Salesman will complete the sale now</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       CANCELLED VIEW
+       ═══════════════════════════════════════ -->
+  <div id="cancelledView" class="hide fixed inset-0 flex items-center justify-center p-4 bg-slate-900 z-[999]">
+    <div class="text-center max-w-sm">
+      <div class="text-6xl mb-3">❌</div>
+      <h2 class="text-xl font-extrabold text-red-500 mb-2">Cancelled</h2>
+      <p class="text-slate-400 text-sm">Points payment was cancelled</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════
+     Firebase SDKs
+     ═══════════════════════════════════════ -->
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const q = s => document.querySelector(s);
+
+  /* ── Config Check ── */
+  if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
+    $('loadingView').classList.add('hide');
+    $('errorView').classList.remove('hide');
+    $('errTitle').textContent = 'Config Missing';
+    $('errMsg').textContent = 'firebase-config.js needs updating';
+    return;
+  }
+
+  /* ── Init Firebase ── */
+  if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+  const db = firebase.firestore();
+
+  /* ── Get Request ID from URL ── */
+  const params = new URLSearchParams(location.search);
+  const requestId = params.get('r');
+
+  if (!requestId) {
+    $('loadingView').classList.add('hide');
+    $('errorView').classList.remove('hide');
+    $('errTitle').textContent = 'Missing Request';
+    $('errMsg').textContent = 'Please scan a valid QR code';
+    return;
+  }
+
+  let request = null;
+  let reqUnsub = null;
+  let timerInterval = null;
+
+  /* ═══════════════════════════════════════════
+     INIT
+     ═══════════════════════════════════════════ */
+  (async function init() {
+    try {
+      const doc = await db.collection('pointsRequests').doc(requestId).get();
+      if (!doc.exists) {
+        $('loadingView').classList.add('hide');
+        $('errorView').classList.remove('hide');
+        $('errTitle').textContent = 'Request Not Found';
+        $('errMsg').textContent = 'This request has expired or was already used';
+        return;
+      }
+
+      request = doc.data();
+
+      /* Already confirmed */
+      if (request.status === 'confirmed') {
+        $('successPoints').textContent = request.pointsUsed || 0;
+        $('successAmount').textContent = request.pointsUsed || 0;
+        $('loadingView').classList.add('hide');
+        $('successView').classList.remove('hide');
+        return;
+      }
+
+      /* Already cancelled */
+      if (request.status === 'cancelled') {
+        $('loadingView').classList.add('hide');
+        $('cancelledView').classList.remove('hide');
+        return;
+      }
+
+      /* Expired */
+      if (Date.now() > (request.expiresAt || 0) && request.status === 'pending') {
+        await db.collection('pointsRequests').doc(requestId).update({ status: 'expired' });
+        $('loadingView').classList.add('hide');
+        $('errorView').classList.remove('hide');
+        $('errTitle').textContent = 'Request Expired';
+        $('errMsg').textContent = 'Ask the salesman to create a new one';
+        return;
+      }
+
+      /* Load shop name */
+      try {
+        const shopDoc = await db.collection('shops').doc(request.shopId).get();
+        if (shopDoc.exists) {
+          $('shopName').textContent = shopDoc.data().shopName || request.shopId;
+        } else {
+          $('shopName').textContent = request.shopId;
+        }
+      } catch (e) {
+        $('shopName').textContent = request.shopId || 'Shop';
+      }
+
+      /* Fill data */
+      $('billTotal').textContent = '₹' + Number(request.billTotal || 0).toFixed(2);
+      $('availPoints').textContent = String(request.availablePoints || 0);
+      $('maxUsable').textContent = String(request.maxPointsUsable || 0);
+
+      /* Setup input */
+      const input = $('pointsInput');
+      input.max = request.maxPointsUsable;
+      input.value = request.maxPointsUsable;
+      updateSummary();
+      input.addEventListener('input', updateSummary);
+      input.addEventListener('blur', () => {
+        let p = +input.value || 0;
+        if (p < 0) p = 0;
+        if (p > request.maxPointsUsable) p = request.maxPointsUsable;
+        input.value = p;
+        updateSummary();
+      });
+
+      /* Quick buttons */
+      q('[data-quick="25"]').onclick = () => { input.value = Math.floor(request.maxPointsUsable * 0.25); updateSummary(); };
+      q('[data-quick="50"]').onclick = () => { input.value = Math.floor(request.maxPointsUsable * 0.50); updateSummary(); };
+      q('[data-quick="75"]').onclick = () => { input.value = Math.floor(request.maxPointsUsable * 0.75); updateSummary(); };
+      q('[data-quick="100"]').onclick = () => { input.value = request.maxPointsUsable; updateSummary(); };
+
+      /* Buttons */
+      $('confirmBtn').onclick = confirmPayment;
+      $('cancelBtn').onclick = cancelPayment;
+
+      /* Show main */
+      $('loadingView').classList.add('hide');
+      $('mainView').classList.remove('hide');
+
+      /* Watch for external cancel */
+      reqUnsub = db.collection('pointsRequests').doc(requestId).onSnapshot(snap => {
+        if (!snap.exists) return;
+        const d = snap.data();
+        if (d.status === 'cancelled' && !$('mainView').classList.contains('hide')) {
+          if (reqUnsub) reqUnsub();
+          if (timerInterval) clearInterval(timerInterval);
+          $('mainView').classList.add('hide');
+          $('cancelledView').classList.remove('hide');
+        }
+      });
+
+      /* Countdown timer */
+      timerInterval = setInterval(() => {
+        const left = (request.expiresAt || 0) - Date.now();
+        if (left <= 0) {
+          clearInterval(timerInterval);
+          $('timer').textContent = '0:00';
+          db.collection('pointsRequests').doc(requestId)
+            .update({ status: 'expired' }).catch(() => {});
+          $('mainView').classList.add('hide');
+          $('errorView').classList.remove('hide');
+          $('errTitle').textContent = 'Request Expired';
+          $('errMsg').textContent = 'Time ran out. Ask the salesman for a new QR.';
+          return;
+        }
+        const mins = Math.floor(left / 60000);
+        const secs = Math.floor((left % 60000) / 1000);
+        $('timer').textContent = mins + ':' + String(secs).padStart(2, '0');
+      }, 1000);
+
+    } catch (e) {
+      console.error('Init error:', e);
+      $('loadingView').classList.add('hide');
+      $('errorView').classList.remove('hide');
+      $('errTitle').textContent = 'Error';
+      $('errMsg').textContent = e.message || 'Could not load request';
+    }
+  })();
+
+  /* ═══════════════════════════════════════════
+     UPDATE SUMMARY
+     ═══════════════════════════════════════════ */
+  function updateSummary() {
+    const input = $('pointsInput');
+    let p = +input.value || 0;
+    if (p < 0) p = 0;
+    if (p > request.maxPointsUsable) p = request.maxPointsUsable;
+    input.value = p;
+
+    const remaining = request.billTotal - p;
+    const pointsLeft = request.availablePoints - p;
+
+    $('summaryBox').innerHTML = `
+      <div class="flex justify-between">
+        <span class="text-slate-400">Using</span>
+        <b class="text-green-400">${p} pts = ₹${p}</b>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-400">Remaining</span>
+        <b class="text-red-400">₹${remaining.toFixed(2)}</b>
+      </div>
+      <div class="flex justify-between border-t border-slate-700 pt-1 mt-1">
+        <span class="text-slate-400">After</span>
+        <b class="text-white">${pointsLeft} pts</b>
+      </div>
+    `;
+  }
+
+  /* ═══════════════════════════════════════════
+     CONFIRM PAYMENT
+     ═══════════════════════════════════════════ */
+  async function confirmPayment() {
+    const p = +$('pointsInput').value || 0;
+
+    if (p <= 0) { alert('Enter a valid points amount'); return; }
+    if (p > request.maxPointsUsable) { alert('Points exceed maximum'); return; }
+    if (p > request.availablePoints) { alert('Not enough points'); return; }
+
+    const btn = $('confirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Confirming...';
+
+    try {
+      await db.collection('pointsRequests').doc(requestId).update({
+        status: 'confirmed',
+        pointsUsed: p,
+        confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+
+      if (reqUnsub) { try { reqUnsub(); } catch(e){} }
+      if (timerInterval) clearInterval(timerInterval);
+
+      $('successPoints').textContent = p;
+      $('successAmount').textContent = p;
+      $('mainView').classList.add('hide');
+      $('successView').classList.remove('hide');
+    } catch (e) {
+      console.error('Confirm error:', e);
+      btn.disabled = false;
+      btn.textContent = '✓ Confirm Points Payment';
+      alert('Failed: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     CANCEL PAYMENT
+     ═══════════════════════════════════════════ */
+  async function cancelPayment() {
+    if (!confirm('Cancel points payment?')) return;
+    try {
+      await db.collection('pointsRequests').doc(requestId).update({
+        status: 'cancelled',
+        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) { console.error(e); }
+    if (reqUnsub) { try { reqUnsub(); } catch(e){} }
+    if (timerInterval) clearInterval(timerInterval);
+    $('mainView').classList.add('hide');
+    $('cancelledView').classList.remove('hide');
+  }
+
+  /* ═══════════════════════════════════════════
+     CLEANUP
+     ═══════════════════════════════════════════ */
+  window.addEventListener('beforeunload', () => {
+    if (reqUnsub) { try { reqUnsub(); } catch(e){} }
+    if (timerInterval) clearInterval(timerInterval);
+  });
+
+})();
+</script>
+</body>
+</html>
