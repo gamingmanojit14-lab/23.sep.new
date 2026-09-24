@@ -6,12 +6,13 @@
    - Camera QR Scanner
    - Remote Scanner Session
    - Remote Payment Device Session
+   - Customer Help ID System
+   - Points Payment Request (QR-based)
    - WhatsApp helpers
    - Hold/Park Sale
    - Discount Presets
    - Split Payment Parser
    - Loyalty Points + Points Payment
-   - Customer Help ID System
    - Commission Calculator
    - CSV Parser
    - Activity Log
@@ -612,7 +613,12 @@ async function showQRModal(text, title, filename) {
    CAMERA QR SCANNER
    ═══════════════════════════════════════════════════════════ */
 let _activeScanner = null;
-function openQRScanner(onScan) {
+function openQRScanner(onScan, options) {
+  options = options || {};
+  const title = options.title || '📷 Scan QR Code';
+  const hint = options.hint || 'Point camera at QR code';
+  const boxSize = options.qrbox || 260;
+
   if (_activeScanner) return;
   if (typeof Html5Qrcode === 'undefined') {
     toast('QR scanner library not loaded', 'error');
@@ -625,22 +631,23 @@ function openQRScanner(onScan) {
   modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:flex;flex-direction:column;font-family:Inter,sans-serif`;
   modal.innerHTML = `
     <div style="padding:14px;display:flex;align-items:center;gap:10px;color:#fff">
-      <div style="flex:1;font-weight:800;font-size:16px">📷 Scan QR Code</div>
+      <div style="flex:1;font-weight:800;font-size:16px">${title}</div>
       <button id="_qrScanClose" style="background:#dc2626;color:#fff;border:none;width:42px;height:42px;border-radius:12px;font-size:22px;font-weight:800;cursor:pointer;line-height:1">×</button>
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px">
       <div id="qrReader" style="width:100%;max-width:440px;background:#111;border-radius:18px;overflow:hidden;border:2px solid #22c55e"></div>
     </div>
     <div style="padding:16px;text-align:center;color:#e5e7eb;font-size:13px;line-height:1.6">
-      📱 Point camera at QR code<br>
+      📱 ${hint}<br>
       <span style="font-size:11px;color:#9ca3af">Auto-closes on scan</span>
     </div>`;
   document.body.appendChild(modal);
+
   const qr = new Html5Qrcode("qrReader", { verbose: false });
   _activeScanner = qr;
   qr.start(
     { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 },
+    { fps: 10, qrbox: { width: boxSize, height: boxSize }, aspectRatio: 1.0 },
     (decoded) => {
       try { navigator.vibrate && navigator.vibrate(100); } catch {}
       qr.stop().then(() => {
@@ -660,6 +667,7 @@ function openQRScanner(onScan) {
     modal.remove();
     toast('Camera could not start', 'error');
   });
+
   document.getElementById('_qrScanClose').onclick = () => {
     if (_activeScanner) _activeScanner.stop().finally(() => { _activeScanner = null; modal.remove(); });
     else modal.remove();
@@ -731,6 +739,66 @@ async function registerCustomerCode(code, shopId, customerId, phone, name, batch
     await db.collection('customerCodes').doc(code).set(data);
   }
   return data;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POINTS PAYMENT REQUEST (QR-based, customer-confirmed)
+   ═══════════════════════════════════════════════════════════ */
+function generatePointsRequestId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = 'PR';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+async function createPointsRequest({ shopId, customerId, customerName, customerHelpId, availablePoints, billTotal, salesmanId, salesmanName }) {
+  const requestId = generatePointsRequestId();
+  const maxPointsUsable = Math.min(+availablePoints || 0, +billTotal || 0);
+  await db.collection('pointsRequests').doc(requestId).set({
+    requestId, shopId, customerId, customerName, customerHelpId,
+    availablePoints: +availablePoints || 0,
+    billTotal: +billTotal || 0,
+    maxPointsUsable,
+    pointsUsed: null,
+    status: 'pending',
+    salesmanId, salesmanName,
+    createdAt: FV.serverTimestamp(),
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+  return requestId;
+}
+
+function buildPointsPayURL(requestId) {
+  const url = new URL('points-pay.html', location.href);
+  url.searchParams.set('r', requestId);
+  return url.href;
+}
+
+async function getPointsRequest(requestId) {
+  const doc = await db.collection('pointsRequests').doc(requestId).get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+}
+
+async function confirmPointsRequest(requestId, pointsUsed) {
+  await db.collection('pointsRequests').doc(requestId).update({
+    status: 'confirmed',
+    pointsUsed: +pointsUsed || 0,
+    confirmedAt: FV.serverTimestamp(),
+  });
+}
+
+async function cancelPointsRequest(requestId) {
+  await db.collection('pointsRequests').doc(requestId).update({
+    status: 'cancelled',
+    cancelledAt: FV.serverTimestamp(),
+  });
+}
+
+function watchPointsRequest(requestId, onChange) {
+  return db.collection('pointsRequests').doc(requestId).onSnapshot(snap => {
+    if (!snap.exists) { onChange(null); return; }
+    onChange({ id: snap.id, ...snap.data() });
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -935,6 +1003,7 @@ function buildInvoiceMessage(sale, settings) {
   L.push(`*Total: ₹${sale.total.toFixed(2)}*`);
   L.push(`Paid: ₹${sale.paid.toFixed(2)}`);
   if (sale.due > 0) L.push(`*Due: ₹${sale.due.toFixed(2)}*`);
+  if (sale.pointsUsed > 0) L.push(`⭐ Points used: ${sale.pointsUsed} pts`);
   L.push('');
   L.push('Thank you! Visit again 🙏');
   return L.join('\n');
@@ -1015,8 +1084,6 @@ function calculateLoyaltyEarn(amount) {
 function calculateCommission(total, ratePercent) {
   return Math.round(Number(total || 0) * Number(ratePercent || 0)) / 100;
 }
-
-/* ── Points Payment Helpers ── */
 function pointsToMoney(points) {
   return Number(points || 0) * POINTS_TO_RUPEES;
 }
@@ -1330,6 +1397,9 @@ window.TP = {
   generateShopId, salesmanEmail,
   // Customer Help ID
   generateCustomerCode, generateUniqueCustomerCode, registerCustomerCode,
+  // Points Payment Request (QR-based)
+  generatePointsRequestId, createPointsRequest, buildPointsPayURL,
+  getPointsRequest, confirmPointsRequest, cancelPointsRequest, watchPointsRequest,
   // Remote Scanner
   generateSessionId, buildScannerURL, createScannerSession, deleteScannerSession,
   // Remote Payment
@@ -1344,7 +1414,7 @@ window.TP = {
   applyDiscountPreset, parseSplitPayments,
   // Loyalty / Commission
   calculateLoyaltyEarn, calculateCommission, LOYALTY_EARN_PER, LOYALTY_REDEEM_VALUE,
-  // Points Payment
+  // Points Payment Helpers
   pointsToMoney, isPointsPaymentEnabled, POINTS_TO_RUPEES,
   // CSV / Log / Label
   parseCSV, logActivity, printLabelSheet,
