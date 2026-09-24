@@ -15,8 +15,10 @@
   .fade-in{ animation:fadeIn .25s ease; }
   .spin{ display:inline-block; animation:spin 1s linear infinite; }
   @keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  @keyframes pop{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
-  .pop{ animation:pop .25s ease; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.4} }
+  .pulse{ animation:pulse 1.5s infinite; }
+  @keyframes slideDown{ from{transform:translateY(-100%);opacity:0} to{transform:translateY(0);opacity:1} }
+  .slide-down{ animation:slideDown .3s ease; }
   html.dark body { background: #111827; color: #e5e7eb; }
   html.dark .bg-white { background: #1f2937 !important; color: #e5e7eb; }
   html.dark .bg-gray-100 { background: #111827 !important; }
@@ -28,6 +30,20 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
 
+<!-- ═══════════════════════════════════════════
+     POINTS REQUEST ALERT (floating)
+     ═══════════════════════════════════════════ -->
+<div id="pointsAlert" class="hidden fixed top-3 inset-x-3 z-[9999] slide-down">
+  <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl p-4 shadow-2xl flex items-center gap-3">
+    <div class="text-4xl">⭐</div>
+    <div class="flex-1 min-w-0">
+      <div class="font-bold text-sm">Points Payment Request!</div>
+      <div class="text-[11px] opacity-90" id="pointsAlertMsg">Opening payment page...</div>
+    </div>
+    <div class="text-2xl spin">⏳</div>
+  </div>
+</div>
+
 <div class="max-w-md mx-auto p-4">
   <div class="text-center my-6">
     <div class="text-5xl mb-2">🧵</div>
@@ -36,7 +52,7 @@
   </div>
 
   <!-- ═══════════════════════════════════════
-       PANEL 1: VERIFY (Help ID + Phone)
+       PANEL 1: VERIFY
        ═══════════════════════════════════════ -->
   <div id="verifyPanel" class="bg-white rounded-2xl p-6 shadow-sm">
     <div class="flex items-center justify-center mb-4">
@@ -60,8 +76,8 @@
     <p id="verifyErr" class="text-xs text-red-600 mt-3 text-center min-h-[16px]"></p>
 
     <div class="mt-4 pt-4 border-t border-gray-100 text-[10px] text-gray-400 text-center leading-relaxed">
-      ℹ️ Your Help ID is printed on your invoice/receipt.<br>
-      It looks like <b class="text-blue-600">C-A3K9Q7</b> — ask the shop if you don't have it.
+      ℹ️ Your Help ID is on your invoice/receipt.<br>
+      It looks like <b class="text-blue-600">C-A3K9Q7</b>
     </div>
   </div>
 
@@ -77,7 +93,6 @@
       <p class="text-xs text-gray-500 mt-3">Now choose how to sign in</p>
     </div>
 
-    <!-- Google Button -->
     <button id="googleBtn" class="w-full bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 py-3.5 rounded-xl font-semibold flex items-center justify-center gap-3 transition active:scale-[.98] mb-4">
       <svg width="20" height="20" viewBox="0 0 48 48">
         <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
@@ -94,13 +109,11 @@
       <div class="flex-1 h-px bg-gray-200"></div>
     </div>
 
-    <!-- Tabs -->
     <div class="flex bg-gray-100 rounded-xl p-1 mb-4">
       <button id="tabLogin" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white shadow text-blue-600">Login</button>
       <button id="tabRegister" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-500">Register</button>
     </div>
 
-    <!-- Login Form -->
     <form id="emailLoginForm" class="space-y-3">
       <input id="loginEmail" type="email" placeholder="Gmail address" autocomplete="email"
         class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
@@ -112,7 +125,6 @@
       </button>
     </form>
 
-    <!-- Register Form -->
     <form id="emailRegisterForm" class="space-y-3 hide">
       <input id="regEmail" type="email" placeholder="Gmail address" autocomplete="email"
         class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none">
@@ -137,7 +149,16 @@
        PANEL 3: DASHBOARD
        ═══════════════════════════════════════ -->
   <div id="dashPanel" class="hide space-y-3 fade-in">
-    <!-- User Card -->
+
+    <!-- Live Status Bar -->
+    <div class="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl p-3 shadow-sm flex items-center gap-3">
+      <div class="text-2xl pulse">🟢</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-sm">Connected & Ready</div>
+        <div class="text-[10px] opacity-90">Keep this open to pay with points</div>
+      </div>
+    </div>
+
     <div class="bg-white rounded-2xl p-4 shadow-sm">
       <div class="flex items-center gap-3">
         <div id="userAvatar" class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600">C</div>
@@ -150,14 +171,12 @@
       <button id="logoutBtn" class="mt-3 w-full text-xs text-red-600 underline">Logout</button>
     </div>
 
-    <!-- Help ID Big Display -->
     <div class="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-dashed border-blue-300 rounded-2xl p-4 text-center">
       <div class="text-[10px] text-blue-700 font-bold mb-1 tracking-wider">YOUR HELP ID</div>
       <div id="helpIdBig" class="text-2xl font-extrabold text-blue-700 font-mono tracking-widest mb-1">—</div>
-      <div class="text-[10px] text-gray-500">Show this to the shop to use your points or check your account</div>
+      <div class="text-[10px] text-gray-500">Show this to the shop for points payment</div>
     </div>
 
-    <!-- Stats -->
     <div class="grid grid-cols-2 gap-3">
       <div class="bg-white rounded-2xl p-4 shadow-sm">
         <div class="text-[10px] text-gray-500 font-semibold">PENDING DUE</div>
@@ -170,7 +189,6 @@
       </div>
     </div>
 
-    <!-- Invoices -->
     <div class="bg-white rounded-2xl p-4 shadow-sm">
       <h3 class="font-bold text-sm mb-3">🧾 Recent Invoices</h3>
       <div id="invoiceList" class="space-y-2">
@@ -178,16 +196,13 @@
       </div>
     </div>
 
-    <!-- Info -->
     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-[11px] text-gray-600 leading-relaxed">
-      <b class="text-blue-700">ℹ️ Note:</b> This portal shows your purchase history. For payments, contact the shop directly.
+      <b class="text-blue-700">💡 Tip:</b> এই পেজ খোলা রাখুন। Salesman points payment দিলে স্বয়ংক্রিয়ভাবে payment page খুলবে।
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     Firebase SDKs
-     ═══════════════════════════════════════ -->
+<!-- Firebase SDKs -->
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -207,7 +222,6 @@
     window.scrollTo({ top: 0 });
   }
 
-  /* ── Date Formatting ── */
   function fmtDate(iso) {
     if (!iso) return '';
     const d = iso.toDate ? iso.toDate() : new Date(iso);
@@ -218,7 +232,6 @@
            String(d.getMinutes()).padStart(2,'0');
   }
 
-  /* ── Phone Normalize ── */
   function normalizePhone(raw) {
     let p = String(raw || '').replace(/\D/g, '');
     if (p.startsWith('880') && p.length === 13) p = '0' + p.slice(3);
@@ -227,56 +240,45 @@
     return p;
   }
 
-  /* ── Config Check ── */
-  if (!window.FIREBASE_CONFIG) {
-    $('verifyErr').textContent = 'firebase-config.js not loaded';
-    $('verifyBtn').disabled = true;
-    return;
-  }
-  if (window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
-    $('verifyErr').textContent = 'Firebase config not set';
+  if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY_HERE') {
+    $('verifyErr').textContent = 'Firebase config missing';
     $('verifyBtn').disabled = true;
     return;
   }
 
-  /* ── Init Firebase ── */
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
   const auth = firebase.auth();
 
-  /* Session data */
-  let verified = null; // { helpId, shopId, customerId, customer, shop }
+  let verified = null;
+  let pointsWatcher = null;
+  let lastHandledRequestId = null;
 
   /* ═══════════════════════════════════════════
-     STEP 1: Verify Help ID + Phone
+     VERIFY Help ID + Phone
      ═══════════════════════════════════════════ */
   $('verifyBtn').addEventListener('click', async () => {
     const helpId = $('inpHelpId').value.trim().toUpperCase();
     const phone = normalizePhone($('inpPhone').value);
     $('verifyErr').textContent = '';
 
-    // Validation
     if (!helpId) { $('verifyErr').textContent = 'Enter Help ID'; return; }
     if (!helpId.startsWith('C-')) { $('verifyErr').textContent = 'Help ID must start with C-'; return; }
-    if (helpId.length < 5) { $('verifyErr').textContent = 'Help ID too short'; return; }
-    if (!phone || phone.length < 10) { $('verifyErr').textContent = 'Enter valid phone number'; return; }
+    if (!phone || phone.length < 10) { $('verifyErr').textContent = 'Enter valid phone'; return; }
 
     const btn = $('verifyBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spin">⏳</span> Verifying...';
 
     try {
-      // 1. Lookup Help ID in customerCodes
       const codeDoc = await db.collection('customerCodes').doc(helpId).get();
       if (!codeDoc.exists) {
-        $('verifyErr').textContent = 'Help ID not found — check with the shop';
+        $('verifyErr').textContent = 'Help ID not found — ask the shop';
         btn.disabled = false; btn.textContent = 'Continue →';
         return;
       }
 
       const codeData = codeDoc.data();
-
-      // 2. Verify phone matches
       const savedPhone = normalizePhone(codeData.phone || '');
       if (savedPhone !== phone) {
         $('verifyErr').textContent = 'Phone does not match this Help ID';
@@ -284,7 +286,6 @@
         return;
       }
 
-      // 3. Fetch shop + customer
       const shopDoc = await db.collection('shops').doc(codeData.shopId).get();
       if (!shopDoc.exists) {
         $('verifyErr').textContent = 'Shop not found';
@@ -308,7 +309,6 @@
         shop: shopDoc.data(),
       };
 
-      // Fill auth panel
       $('verifiedShop').textContent = verified.shop.shopName || codeData.shopId;
       $('verifiedPhone').textContent = phone;
 
@@ -323,7 +323,6 @@
     }
   });
 
-  // Auto-format Help ID input (uppercase)
   $('inpHelpId').addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase();
   });
@@ -350,23 +349,20 @@
      GOOGLE SIGN-IN
      ═══════════════════════════════════════════ */
   $('googleBtn').addEventListener('click', async () => {
-    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify first'; return; }
     $('authErr').textContent = '';
     const btn = $('googleBtn');
     btn.disabled = true;
-
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await auth.signInWithPopup(provider);
-      // onAuthStateChanged handles the rest
     } catch (e) {
-      console.error('Google sign-in error:', e);
+      console.error(e);
       let msg = 'Google sign-in failed';
       if (e.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled';
-      if (e.code === 'auth/popup-blocked') msg = 'Popup blocked — allow popups and retry';
-      if (e.code === 'auth/operation-not-allowed') msg = 'Google sign-in not enabled in Firebase Console';
-      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
+      if (e.code === 'auth/popup-blocked') msg = 'Popup blocked';
+      if (e.code === 'auth/operation-not-allowed') msg = 'Google not enabled';
       $('authErr').textContent = msg;
       btn.disabled = false;
     }
@@ -377,26 +373,20 @@
      ═══════════════════════════════════════════ */
   $('emailLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify first'; return; }
     $('authErr').textContent = '';
     const email = $('loginEmail').value.trim().toLowerCase();
     const pass = $('loginPass').value;
-
     if (!email || !pass) { $('authErr').textContent = 'Enter email and password'; return; }
 
     const btn = $('loginEmailBtn');
     btn.disabled = true; btn.textContent = 'Logging in...';
-
     try {
       await auth.signInWithEmailAndPassword(email, pass);
     } catch (e) {
-      console.error('Login error:', e);
       let msg = 'Login failed';
-      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential','auth/invalid-login-credentials'].includes(e.code)) {
-        msg = 'Invalid email or password';
-      }
-      if (e.code === 'auth/too-many-requests') msg = 'Too many attempts — try later';
-      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
+      if (['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(e.code)) msg = 'Invalid email or password';
+      if (e.code === 'auth/too-many-requests') msg = 'Too many attempts';
       $('authErr').textContent = msg;
       btn.disabled = false; btn.textContent = 'Login';
     }
@@ -407,38 +397,35 @@
      ═══════════════════════════════════════════ */
   $('emailRegisterForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!verified) { $('authErr').textContent = 'Please verify Help ID first'; return; }
+    if (!verified) { $('authErr').textContent = 'Please verify first'; return; }
     $('authErr').textContent = '';
     const email = $('regEmail').value.trim().toLowerCase();
     const pass = $('regPass').value;
     const pass2 = $('regPass2').value;
-
     if (!email) { $('authErr').textContent = 'Enter email'; return; }
     if (pass.length < 6) { $('authErr').textContent = 'Password min 6 chars'; return; }
     if (pass !== pass2) { $('authErr').textContent = 'Passwords do not match'; return; }
 
     const btn = $('registerEmailBtn');
     btn.disabled = true; btn.textContent = 'Creating...';
-
     try {
       await auth.createUserWithEmailAndPassword(email, pass);
     } catch (e) {
-      console.error('Register error:', e);
       let msg = 'Registration failed';
-      if (e.code === 'auth/email-already-in-use') msg = 'This email is already registered — try Login';
-      if (e.code === 'auth/invalid-email') msg = 'Invalid email format';
-      if (e.code === 'auth/weak-password') msg = 'Password is too weak';
-      if (e.code === 'auth/network-request-failed') msg = 'Network error — check internet';
+      if (e.code === 'auth/email-already-in-use') msg = 'Email already registered';
+      if (e.code === 'auth/invalid-email') msg = 'Invalid email';
+      if (e.code === 'auth/weak-password') msg = 'Password too weak';
       $('authErr').textContent = msg;
       btn.disabled = false; btn.textContent = 'Create Account';
     }
   });
 
   /* ═══════════════════════════════════════════
-     BACK TO VERIFY
+     BACK
      ═══════════════════════════════════════════ */
   $('backToVerify').addEventListener('click', async () => {
     try { await auth.signOut(); } catch (e) {}
+    stopPointsWatcher();
     verified = null;
     $('inpHelpId').value = '';
     $('inpPhone').value = '';
@@ -454,29 +441,21 @@
      ═══════════════════════════════════════════ */
   auth.onAuthStateChanged(async user => {
     if (!user) {
-      // Not signed in
-      if (verified) {
-        // They verified but aren't signed in — show auth panel
-        showPanel('authPanel');
-      } else {
-        showPanel('verifyPanel');
-      }
+      stopPointsWatcher();
+      if (verified) showPanel('authPanel');
+      else showPanel('verifyPanel');
       return;
     }
 
-    // Signed in — do we have verify data?
     if (!verified) {
-      // Try to restore from localStorage
       const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
       if (saved && saved.helpId && saved.phone) {
         try {
           const codeDoc = await db.collection('customerCodes').doc(saved.helpId).get();
           if (!codeDoc.exists) { await auth.signOut(); return; }
           const codeData = codeDoc.data();
-
           const shopDoc = await db.collection('shops').doc(codeData.shopId).get();
           if (!shopDoc.exists) { await auth.signOut(); return; }
-
           const custDoc = await db.collection('shops').doc(codeData.shopId)
             .collection('customers').doc(codeData.customerId).get();
           if (!custDoc.exists) { await auth.signOut(); return; }
@@ -489,18 +468,15 @@
             shop: shopDoc.data(),
           };
         } catch (e) {
-          console.warn('Restore failed:', e);
           await auth.signOut();
           return;
         }
       } else {
-        // Signed in without verification — send to verify
         showPanel('verifyPanel');
         return;
       }
     }
 
-    // Save session for auto-login
     localStorage.setItem('tp_portal_session', JSON.stringify({
       helpId: verified.helpId,
       phone: verified.customer.phone,
@@ -518,7 +494,6 @@
     const { helpId, shopId, customerId, customer, shop } = verified;
 
     try {
-      // Fill UI
       $('custName').textContent = customer.name || 'Customer';
       $('shopName').textContent = shop.shopName || shopId;
       $('helpIdBig').textContent = helpId;
@@ -527,17 +502,13 @@
       $('pointsValue').textContent = String(customer.loyaltyPoints || 0);
       $('userAvatar').textContent = (customer.name || 'C').charAt(0).toUpperCase();
 
-      // Load invoices
       try {
         const salesSnap = await db.collection('shops').doc(shopId)
           .collection('sales')
           .where('customerId', '==', customerId)
-          .limit(50)
-          .get();
+          .limit(50).get();
 
         let sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        // Sort by date (newest first) client-side — no index needed
         sales.sort((a, b) => {
           const da = a.saleDate?.toDate ? a.saleDate.toDate() : new Date(a.saleDate || 0);
           const db_ = b.saleDate?.toDate ? b.saleDate.toDate() : new Date(b.saleDate || 0);
@@ -545,13 +516,12 @@
         });
         sales = sales.slice(0, 20);
 
-        if (sales.length) {
-          $('invoiceList').innerHTML = sales.map(s => `
+        $('invoiceList').innerHTML = sales.length
+          ? sales.map(s => `
             <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2.5 text-xs">
               <div class="min-w-0 flex-1">
                 <div class="font-semibold font-mono truncate">${s.invoiceNo}</div>
                 <div class="text-[10px] text-gray-500">${fmtDate(s.saleDate)}</div>
-                ${s.salesmanName ? `<div class="text-[9px] text-gray-400">${s.salesmanName}</div>` : ''}
               </div>
               <div class="text-right flex-shrink-0 ml-2">
                 <div class="font-bold">₹${Number(s.total||0).toFixed(2)}</div>
@@ -559,18 +529,14 @@
                   ? `<div class="text-[10px] text-red-600">Due ₹${Number(s.due).toFixed(2)}</div>`
                   : `<div class="text-[10px] text-green-600">Paid</div>`}
               </div>
-            </div>
-          `).join('');
-        } else {
-          $('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
-        }
+            </div>`).join('')
+          : '<div class="text-center text-gray-400 py-4 text-xs">No invoices yet</div>';
       } catch (e) {
-        console.warn('Invoices failed:', e);
         $('invoiceList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">Could not load invoices</div>';
       }
 
-      // Logout
       $('logoutBtn').onclick = async () => {
+        stopPointsWatcher();
         localStorage.removeItem('tp_portal_session');
         verified = null;
         try { await auth.signOut(); } catch (e) {}
@@ -579,25 +545,109 @@
 
       showPanel('dashPanel');
 
+      // ⭐ START WATCHING FOR POINTS REQUESTS
+      startPointsWatcher();
+
     } catch (e) {
       console.error('Dashboard error:', e);
-      $('authErr').textContent = 'Could not load dashboard';
       showPanel('authPanel');
     }
   }
 
   /* ═══════════════════════════════════════════
-     BOOT — Restore session on load
+     ⭐ POINTS REQUEST WATCHER
+     Auto-redirect to points-pay.html on new request
+     ═══════════════════════════════════════════ */
+  function startPointsWatcher() {
+    stopPointsWatcher();
+    if (!verified) return;
+
+    // Query pending requests for this customer
+    // Note: no compound index required, we filter client-side
+    pointsWatcher = db.collection('pointsRequests')
+      .where('customerId', '==', verified.customerId)
+      .limit(20)
+      .onSnapshot(snap => {
+        const now = Date.now();
+        snap.docChanges().forEach(change => {
+          if (change.type !== 'added') return;
+          const d = change.doc.data();
+
+          // Only handle pending, non-expired, recent requests
+          if (d.status !== 'pending') return;
+          if (!d.expiresAt || d.expiresAt < now) return;
+          if (d.createdAt && d.createdAt.toDate) {
+            const age = now - d.createdAt.toDate().getTime();
+            if (age > 3 * 60 * 1000) return; // older than 3 min — ignore
+          }
+
+          // Avoid duplicate handling
+          if (lastHandledRequestId === d.requestId) return;
+          lastHandledRequestId = d.requestId;
+
+          handlePointsRequest(d);
+        });
+      }, err => {
+        console.error('Points watcher error:', err);
+        // Retry after 5s
+        setTimeout(() => { if (verified) startPointsWatcher(); }, 5000);
+      });
+  }
+
+  function stopPointsWatcher() {
+    if (pointsWatcher) { try { pointsWatcher(); } catch (e) {} pointsWatcher = null; }
+  }
+
+  function handlePointsRequest(d) {
+    console.log('⭐ Points request received:', d);
+
+    // Vibrate
+    try { navigator.vibrate && navigator.vibrate([100, 80, 100, 80, 200]); } catch (e) {}
+
+    // Beep
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0.15;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {}
+
+    // Show alert
+    const alertEl = $('pointsAlert');
+    if (alertEl) {
+      alertEl.classList.remove('hidden');
+      $('pointsAlertMsg').textContent = `Bill ₹${Number(d.billTotal || 0).toFixed(2)} · Opening...`;
+    }
+
+    // Auto-redirect after 800ms
+    setTimeout(() => {
+      const url = new URL('points-pay.html', location.href);
+      url.searchParams.set('r', d.requestId);
+      location.href = url.href;
+    }, 800);
+  }
+
+  /* ═══════════════════════════════════════════
+     BOOT
      ═══════════════════════════════════════════ */
   (async function boot() {
-    // Pre-fill Help ID / Phone if saved
     const saved = JSON.parse(localStorage.getItem('tp_portal_session') || 'null');
     if (saved && saved.helpId && saved.phone) {
       $('inpHelpId').value = saved.helpId;
       $('inpPhone').value = saved.phone;
     }
-    // onAuthStateChanged will handle showing the right panel
   })();
+
+  // Cleanup on unload
+  window.addEventListener('beforeunload', () => {
+    stopPointsWatcher();
+  });
 
 })();
 </script>
