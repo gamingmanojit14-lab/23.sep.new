@@ -117,6 +117,73 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- 🔶 P2P PAYMENT MODAL                                 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="p2pPaymentModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.95);z-index:9999;align-items:center;justify-content:center;padding:16px;font-family:Inter,system-ui,sans-serif;overflow-y:auto">
+  <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;text-align:center;color:#fff;box-shadow:0 25px 70px rgba(0,0,0,.5)">
+    <div style="font-size:48px;margin-bottom:6px">🔶</div>
+    <h3 style="font-weight:800;font-size:20px;margin:0 0 4px">P2P Wallet Payment</h3>
+    <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">Customer scans this QR with their Wallet App</p>
+
+    <div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border-radius:16px;padding:16px;margin-bottom:14px">
+      <div style="font-size:11px;opacity:.85">Amount to Pay</div>
+      <div id="p2pModalAmount" style="font-size:32px;font-weight:800">₹0</div>
+      <div id="p2pModalInvoice" style="font-size:11px;opacity:.85;margin-top:4px;font-family:monospace">—</div>
+    </div>
+
+    <div style="background:#fff;padding:12px;border-radius:16px;display:inline-block;border:2px solid #e5e7eb;margin-bottom:12px">
+      <img id="p2pQrImg" src="" alt="Payment QR" style="width:240px;height:240px;display:block">
+    </div>
+
+    <div id="p2pStatusBox" style="background:#312e81;border:1px solid #6366f1;border-radius:12px;padding:14px;font-size:13px;color:#c7d2fe;font-weight:600;margin-bottom:12px">
+      <div style="font-size:24px;margin-bottom:6px">⏳</div>
+      Waiting for customer to pay...
+      <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400">
+        Expires in <span id="p2pCountdown">5:00</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button id="p2pManualBtn" style="padding:12px;background:#334155;color:#cbd5e1;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">
+        ⌨️ Enter Wallet ID Manually
+      </button>
+      <button id="p2pCancelBtn" style="padding:12px;background:#7f1d1d;color:#fecaca;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ⌨️ MANUAL WALLET ID MODAL                            -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="p2pManualModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.95);z-index:9999;align-items:center;justify-content:center;padding:16px;font-family:Inter,system-ui,sans-serif">
+  <div style="background:#1e293b;border-radius:24px;max-width:400px;width:100%;padding:24px;color:#fff">
+    <h3 style="font-weight:800;font-size:18px;margin:0 0 4px">⌨️ Manual Payment</h3>
+    <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">Enter customer's Wallet ID to debit directly</p>
+
+    <label style="display:block;font-size:11px;font-weight:700;color:#cbd5e1;margin-bottom:4px">Wallet ID</label>
+    <input id="p2pManualWalletId" type="text" placeholder="W-XXXXXXX" autocomplete="off"
+      style="width:100%;padding:12px;background:#0f172a;border:2px solid #475569;border-radius:10px;font-family:monospace;color:#fff;font-size:14px;outline:none;margin-bottom:12px;text-transform:uppercase">
+
+    <div id="p2pManualPreview" style="display:none;background:#0f172a;border-radius:10px;padding:10px;font-size:12px;margin-bottom:12px;color:#cbd5e1">
+      Loading...
+    </div>
+
+    <p id="p2pManualErr" style="font-size:12px;color:#fca5a5;margin:0 0 12px;min-height:16px"></p>
+
+    <div style="display:flex;gap:8px">
+      <button id="p2pManualBack" style="flex:1;padding:12px;background:#334155;color:#cbd5e1;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">
+        ← Back
+      </button>
+      <button id="p2pManualPay" style="flex:1;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">
+        ✓ Pay Now
+      </button>
+    </div>
+  </div>
+</div>
+
 <iframe id="printFrame" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;"></iframe>
 
 <script src="firebase-config.js"></script>
@@ -338,7 +405,7 @@ function renderPOS() {
         if (S.cart.length) {
           renderCartItems(); renderCartCheckout();
         }
-        TP.toast(`✓ ${c.name} — ${c.loyaltyPoints || 0} pts`, 'success');
+        TP.toast(`✓ ${c.name}`, 'success');
       } catch (e) { TP.toast(e.message, 'error'); }
     }, {
       title: '👤 Scan Customer QR',
@@ -487,7 +554,6 @@ function renderCartCheckout() {
   const subtotal = S.cart.reduce((a, it) => a + it.qty * it.price, 0);
   const st = S.profile.shop.settings || {};
   const hasUPI = !!st.upiId;
-  const pointsEnabled = TP.isPointsPaymentEnabled(st);
   el.innerHTML = `
     <div class="space-y-3">
       <div>
@@ -526,12 +592,9 @@ function renderCartCheckout() {
           <option value="card">💳 Card</option>
           <option value="bank">🏦 Bank</option>
           <option value="upi" ${hasUPI ? '' : 'disabled'}>💳 UPI QR ${hasUPI ? '' : '(not set)'}</option>
-          <option value="points" ${pointsEnabled ? '' : 'disabled'}>⭐ Points ${pointsEnabled ? '' : '(disabled)'}</option>
+          <option value="p2p_wallet">🔶 P2P Wallet (Points)</option>
           <option value="credit">📝 Credit</option>
         </select></div>
-      <div id="pointsHint" class="hidden text-[11px] bg-purple-50 border border-purple-200 rounded-lg p-2 text-purple-700">
-        ⭐ Points payment — open payer mode available
-      </div>
       <div class="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-4 space-y-1.5 text-sm border border-green-100">
         <div class="flex justify-between"><span class="text-gray-600">Subtotal</span><span id="sumSub" class="font-medium">${TP.money(subtotal)}</span></div>
         <div class="flex justify-between"><span class="text-gray-600">Discount</span><span id="sumDisc" class="font-medium text-orange-600">- ${TP.money(0)}</span></div>
@@ -568,20 +631,6 @@ function renderCartCheckout() {
   document.getElementById('splitPayBtn').addEventListener('click', () => openSplitPaymentModal());
   document.getElementById('checkoutBtn').addEventListener('click', completeSale);
 
-  document.getElementById('payMethod').addEventListener('change', () => {
-    updateSummary();
-    const method = document.getElementById('payMethod').value;
-    if (method === 'points') {
-      const stt = S.profile.shop.settings || {};
-      if (!TP.isPointsPaymentEnabled(stt)) {
-        TP.toast('Points payment is disabled by admin', 'warn');
-        document.getElementById('payMethod').value = 'cash';
-        return;
-      }
-      openPointsPaymentModal();
-    }
-  });
-
   updateSummary();
 }
 
@@ -597,7 +646,7 @@ function renderCmExtra() {
   if (S.custMode === 'existing') {
     el.innerHTML = `<select id="custSelect" class="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none">
       <option value="">-- Select customer --</option>
-      ${S.customers.map(c => `<option value="${c.id}" ${S.custId===c.id?'selected':''}>${TP.esc(c.name)}${c.phone?' · '+TP.esc(c.phone):''}${(+c.loyaltyPoints||0)>0?' ⭐'+c.loyaltyPoints:''}${(+c.due||0)>0?' (Due '+TP.money(c.due)+')':''}</option>`).join('')}
+      ${S.customers.map(c => `<option value="${c.id}" ${S.custId===c.id?'selected':''}>${TP.esc(c.name)}${c.phone?' · '+TP.esc(c.phone):''}${c.walletId ? ' 🔶' : ''}${(+c.due||0)>0?' (Due '+TP.money(c.due)+')':''}</option>`).join('')}
     </select>`;
     document.getElementById('custSelect').addEventListener('change', e => {
       S.custId = e.target.value;
@@ -625,16 +674,11 @@ function updateSummary() {
   document.getElementById('sumPaid').textContent = TP.money(paid);
   document.getElementById('sumDue').textContent = TP.money(due);
   document.getElementById('sumChange').textContent = TP.money(change);
-
-  const methodSelect = document.getElementById('payMethod');
-  const pointsHint = document.getElementById('pointsHint');
-  if (methodSelect && pointsHint) {
-    const isPoints = methodSelect.value === 'points';
-    if (isPoints) pointsHint.classList.remove('hidden');
-    else pointsHint.classList.add('hidden');
-  }
 }
 
+/* ============================================================
+   COMPLETE SALE
+   ============================================================ */
 async function completeSale() {
   if (!S.cart.length) { TP.toast('Cart is empty', 'error'); return; }
   const subtotal = S.cart.reduce((a, it) => a + it.qty * it.price, 0);
@@ -646,33 +690,60 @@ async function completeSale() {
   const method = (document.getElementById('payMethod')||{}).value || 'cash';
   const btn = document.getElementById('checkoutBtn');
 
-  // Points payment
-  let pointsUsed = 0;
-  let payerInfo = null;
-  if (method === 'points') {
-    pointsUsed = +window._pointsToRedeem || 0;
-    if (pointsUsed <= 0) { TP.toast('Customer has not confirmed points yet', 'error'); return; }
-    if (pointsUsed > total) pointsUsed = total;
-    payerInfo = {
-      id: window._pointsPayerId || null,
-      name: window._pointsPayerName || null,
-    };
-    // If specific customer was selected and payer info missing (manual)
-    if (!payerInfo.id && S.custMode === 'existing') {
-      const cid = (document.getElementById('custSelect')||{}).value || S.custId;
-      const c = S.customers.find(x => x.id === cid);
-      if (c) { payerInfo.id = c.id; payerInfo.name = c.name; }
-    }
-    if (!payerInfo.id) { TP.toast('Payer info missing', 'error'); return; }
-  }
-
   let splitPayments = null;
   if (window._splitPayments && window._splitPayments.length) {
     splitPayments = window._splitPayments;
     window._splitPayments = null;
   }
 
-  // UPI payment flow
+  // ═══════════════════════════════════════════════════
+  // 🔶 P2P WALLET PAYMENT (NEW)
+  // ═══════════════════════════════════════════════════
+  if (method === 'p2p_wallet') {
+    const customerIdForP2P = S.custMode === 'existing' ? ((document.getElementById('custSelect')||{}).value || S.custId) : null;
+    const customerForP2P = customerIdForP2P ? S.customers.find(x => x.id === customerIdForP2P) : null;
+    const customerWalletId = customerForP2P ? (customerForP2P.walletId || null) : null;
+
+    // Generate invoice number
+    const tk = TP.todayKey();
+    const todayInvoices = S.sales.filter(s => (s.invoiceNo||'').includes('-' + tk + '-'));
+    const maxSeq = todayInvoices.reduce((m, s) => Math.max(m, parseInt((s.invoiceNo||'').split('-').pop(), 10) || 0), 0);
+    const invoiceNo = `INV-${tk}-${String(maxSeq + 1).padStart(4, '0')}`;
+
+    // Capture cart snapshot for later
+    const cartSnapshot = S.cart.map(it => ({...it}));
+    const saleTypeSnapshot = S.saleType;
+
+    // Start P2P flow — sale completes inside onSuccess callback
+    window.startP2PPayment({
+      amount: total,
+      invoiceNo: invoiceNo,
+      customerWalletId: customerWalletId,
+      onSuccess: async (saleData) => {
+        try {
+          await finalizeSale({
+            method: 'p2p_wallet',
+            subtotal, discount, total,
+            paid: total, due: 0,
+            splitPayments: null,
+            cartSnapshot, saleTypeSnapshot,
+            invoiceNo,
+            customerIdForP2P,
+            customerForP2P,
+            p2pPayment: saleData?.payment || null,
+          });
+        } catch (err) {
+          console.error('Sale finalize error:', err);
+          TP.toast(err.message || 'Sale save failed', 'error');
+        }
+      }
+    });
+    return;
+  }
+
+  // ═══════════════════════════════════════════════════
+  // UPI PAYMENT FLOW (existing)
+  // ═══════════════════════════════════════════════════
   if (method === 'upi') {
     const st = S.profile.shop.settings || {};
     if (!st.upiId) { TP.toast('UPI not set', 'error'); return; }
@@ -710,149 +781,26 @@ async function completeSale() {
     }
   }
 
+  // ═══════════════════════════════════════════════════
+  // NORMAL SALE (cash / bkash / card / bank / upi / credit)
+  // ═══════════════════════════════════════════════════
   btn.disabled = true; btn.textContent = 'Processing...';
-
   try {
-    const shopRef = TP.db.collection('shops').doc(S.shopId);
-    let customerId = null, customerName = 'Walk-in Customer', customerPhone = '', customerCode = null;
-    let newCustomerRef = null;
-
-    if (S.custMode === 'existing') {
-      const cid = (document.getElementById('custSelect')||{}).value || S.custId;
-      if (!cid) throw new Error('Select a customer');
-      const c = S.customers.find(x => x.id === cid);
-      if (c) {
-        customerId = c.id; customerName = c.name; customerPhone = c.phone || '';
-        customerCode = c.customerCode || null;
-      }
-    } else if (S.custMode === 'new') {
-      const name = ((document.getElementById('newCustName')||{}).value || '').trim();
-      const phone = ((document.getElementById('newCustPhone')||{}).value || '').trim();
-      if (!name) throw new Error('Customer name required');
-      newCustomerRef = shopRef.collection('customers').doc();
-      customerId = newCustomerRef.id; customerName = name; customerPhone = phone;
-      customerCode = await TP.generateUniqueCustomerCode();
-    }
-
     const tk = TP.todayKey();
     const todayInvoices = S.sales.filter(s => (s.invoiceNo||'').includes('-' + tk + '-'));
     const maxSeq = todayInvoices.reduce((m, s) => Math.max(m, parseInt((s.invoiceNo||'').split('-').pop(), 10) || 0), 0);
     const invoiceNo = `INV-${tk}-${String(maxSeq + 1).padStart(4, '0')}`;
 
-    const batch = TP.db.batch();
-    const saleRef = shopRef.collection('sales').doc();
-
-    for (const it of S.cart) {
-      const p = S.products.find(x => x.id === it.productId);
-      if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty||0) - it.qty });
-    }
-
-    if (newCustomerRef) {
-      batch.set(newCustomerRef, {
-        name: customerName, phone: customerPhone, address: '',
-        due: due, loyaltyPoints: 0,
-        customerCode: customerCode,
-        createdAt: TP.FV.serverTimestamp(),
-      });
-      TP.registerCustomerCode(customerCode, S.shopId, customerId, customerPhone, customerName, batch);
-    } else if (customerId && due > 0 && method !== 'points') {
-      // Only add due to customer if not paid by points
-      const c = S.customers.find(x => x.id === customerId);
-      if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) + due });
-    }
-
-    batch.set(saleRef, {
-      invoiceNo, customerId, customerName, customerPhone, customerCode,
-      salesmanId: S.profile.uid, salesmanName: S.profile.name,
-      type: S.saleType, items: S.cart.map(it => ({...it})),
-      subtotal, discount, total, paid, due,
-      paymentMethod: method,
-      splitPayments: splitPayments,
-      pointsUsed: pointsUsed,
-      pointsPaidBy: payerInfo ? payerInfo.id : null,
-      pointsPaidByName: payerInfo ? payerInfo.name : null,
-      saleDate: TP.FV.serverTimestamp(),
+    await finalizeSale({
+      method, subtotal, discount, total,
+      paid, due, splitPayments,
+      cartSnapshot: S.cart.map(it => ({...it})),
+      saleTypeSnapshot: S.saleType,
+      invoiceNo,
+      customerIdForP2P: null,
+      customerForP2P: null,
+      p2pPayment: null,
     });
-
-    await batch.commit();
-
-    const sale = {
-      id: saleRef.id, invoiceNo, customerId, customerName, customerPhone, customerCode,
-      salesmanId: S.profile.uid, salesmanName: S.profile.name,
-      type: S.saleType, items: S.cart.map(it => ({...it})),
-      subtotal, discount, total, paid, due,
-      paymentMethod: method, splitPayments, pointsUsed,
-      pointsPaidBy: payerInfo ? payerInfo.id : null,
-      pointsPaidByName: payerInfo ? payerInfo.name : null,
-      saleDate: new Date(),
-    };
-
-    // ⭐ Deduct points from the PAYER's wallet (not the cart customer)
-    if (pointsUsed > 0 && payerInfo && payerInfo.id) {
-      try {
-        const payerDoc = await shopRef.collection('customers').doc(payerInfo.id).get();
-        if (payerDoc.exists) {
-          const payerData = payerDoc.data();
-          const newBal = Math.max(0, (+payerData.loyaltyPoints || 0) - pointsUsed);
-          await shopRef.collection('customers').doc(payerInfo.id).update({ loyaltyPoints: newBal });
-          await shopRef.collection('loyaltyTransactions').add({
-            customerId: payerInfo.id,
-            customerName: payerInfo.name || 'Customer',
-            points: -pointsUsed,
-            type: 'redeem',
-            invoiceNo,
-            paidForCustomerId: customerId !== payerInfo.id ? customerId : null,
-            paidForCustomerName: customerId !== payerInfo.id ? customerName : null,
-            timestamp: TP.FV.serverTimestamp(),
-          });
-        }
-      } catch (e) { console.warn('points deduct:', e); }
-    }
-    window._pointsToRedeem = null;
-    window._pointsPayerId = null;
-    window._pointsPayerName = null;
-
-    // Earn points on the cart customer (whoever bought)
-    const pointsEarned = TP.calculateLoyaltyEarn(total);
-    if (customerId && pointsEarned > 0) {
-      try {
-        const c = S.customers.find(x => x.id === customerId);
-        if (c) {
-          const currentPts = (+c.loyaltyPoints || 0);
-          await shopRef.collection('customers').doc(c.id).update({
-            loyaltyPoints: currentPts + pointsEarned
-          });
-          await shopRef.collection('loyaltyTransactions').add({
-            customerId, customerName, points: pointsEarned, type: 'earn',
-            invoiceNo, timestamp: TP.FV.serverTimestamp(),
-          });
-        }
-      } catch (e) { console.warn('loyalty:', e); }
-    }
-
-    // Commission
-    const commRate = +S.profile.commissionRate || 0;
-    if (commRate > 0) {
-      const comm = TP.calculateCommission(total, commRate);
-      await shopRef.collection('sales').doc(saleRef.id).update({
-        commissionAmount: comm, commissionRate: commRate
-      });
-    }
-
-    TP.logActivity(S.shopId, S.profile.uid, S.profile.name, 'SALE', `${invoiceNo} · ₹${total}`);
-
-    try {
-      await shopRef.collection('attendance').add({
-        userId: S.profile.uid, userName: S.profile.name, role: 'salesman',
-        action: 'SALE', timestamp: TP.FV.serverTimestamp(),
-        meta: { invoiceNo, total },
-      });
-    } catch (e) {}
-
-    S.cart = [];
-    closeModal('cartModal');
-    setTimeout(() => showInvoice(sale), 200);
-    TP.toast('Sale completed!', 'success');
   } catch (err) {
     console.error(err);
     TP.toast(err.message || 'Sale failed', 'error');
@@ -861,205 +809,132 @@ async function completeSale() {
 }
 
 /* ============================================================
-   POINTS PAYMENT MODAL — OPEN PAYER MODE
-   QR = payment receive address. Whoever scans + verifies pays.
+   FINALIZE SALE — shared by all payment methods
    ============================================================ */
-async function openPointsPaymentModal() {
-  const subtotal = S.cart.reduce((a, it) => a + it.qty * it.price, 0);
-  const discount = +((document.getElementById('discountInput')||{}).value || 0);
-  const total = Math.max(0, subtotal - discount);
+async function finalizeSale({
+  method, subtotal, discount, total, paid, due,
+  splitPayments, cartSnapshot, saleTypeSnapshot,
+  invoiceNo, customerIdForP2P, customerForP2P, p2pPayment
+}) {
+  const shopRef = TP.db.collection('shops').doc(S.shopId);
+  let customerId = null, customerName = 'Walk-in Customer', customerPhone = '', customerCode = null;
+  let newCustomerRef = null;
 
-  const selectedCid = (document.getElementById('custSelect')||{}).value || S.custId;
-  const selectedCust = selectedCid ? S.customers.find(x => x.id === selectedCid) : null;
-
-  // Mode chooser
-  const old = document.getElementById('_pointsModeModal');
-  if (old) old.remove();
-  const modeModal = document.createElement('div');
-  modeModal.id = '_pointsModeModal';
-  modeModal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.97);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto';
-  modeModal.innerHTML = `
-    <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;color:#fff">
-      <div style="font-size:48px;text-align:center;margin-bottom:6px">⭐</div>
-      <h3 style="font-weight:800;font-size:20px;text-align:center;margin:0 0 6px">Points Payment</h3>
-      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 18px">Bill: ₹${total.toFixed(2)} — choose who will pay</p>
-
-      <button id="_modeOpen" style="width:100%;background:linear-gradient(135deg,#a855f7,#2563eb);color:#fff;border:none;border-radius:14px;padding:16px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:10px;text-align:left">
-        📱 Open — Anyone can pay
-        <div style="font-size:11px;font-weight:400;opacity:.9;margin-top:4px">Show QR. Whoever scans & verifies will pay from their own wallet.</div>
-      </button>
-
-      ${selectedCust ? `
-      <button id="_modeOwn" style="width:100%;background:#334155;color:#e2e8f0;border:none;border-radius:14px;padding:16px;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;text-align:left">
-        👤 Only ${TP.esc(selectedCust.name)} can pay
-        <div style="font-size:11px;font-weight:400;opacity:.75;margin-top:4px">Only this customer's wallet will be charged.</div>
-      </button>` : ''}
-
-      <button id="_modeCancel" style="width:100%;background:transparent;color:#94a3b8;border:none;padding:12px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;margin-top:8px">
-        Cancel
-      </button>
-    </div>`;
-  document.body.appendChild(modeModal);
-
-  document.getElementById('_modeCancel').onclick = () => {
-    modeModal.remove();
-    document.getElementById('payMethod').value = 'cash';
-  };
-  document.getElementById('_modeOpen').onclick = () => {
-    modeModal.remove();
-    createAndShowPointsModal(total, null, true);
-  };
-  if (selectedCust) {
-    document.getElementById('_modeOwn').onclick = () => {
-      modeModal.remove();
-      createAndShowPointsModal(total, selectedCust, false);
-    };
+  if (S.custMode === 'existing') {
+    const cid = (document.getElementById('custSelect')||{}).value || S.custId;
+    if (!cid) throw new Error('Select a customer');
+    const c = S.customers.find(x => x.id === cid);
+    if (c) {
+      customerId = c.id; customerName = c.name; customerPhone = c.phone || '';
+      customerCode = c.customerCode || null;
+    }
+  } else if (S.custMode === 'new') {
+    const name = ((document.getElementById('newCustName')||{}).value || '').trim();
+    const phone = ((document.getElementById('newCustPhone')||{}).value || '').trim();
+    if (!name) throw new Error('Customer name required');
+    newCustomerRef = shopRef.collection('customers').doc();
+    customerId = newCustomerRef.id; customerName = name; customerPhone = phone;
+    customerCode = await TP.generateUniqueCustomerCode();
   }
-}
 
-async function createAndShowPointsModal(total, targetCustomer, openPayer) {
-  try {
-    const requestId = await TP.createPointsRequest({
-      shopId: S.shopId,
-      customerId: openPayer ? null : targetCustomer.id,
-      customerName: openPayer ? '' : targetCustomer.name,
-      customerHelpId: openPayer ? '' : (targetCustomer.customerCode || ''),
-      customerPhone: openPayer ? '' : (targetCustomer.phone || ''),
-      availablePoints: openPayer ? 0 : (+targetCustomer.loyaltyPoints || 0),
-      billTotal: total,
-      salesmanId: S.profile.uid,
-      salesmanName: S.profile.name,
-      openPayer: openPayer,
+  const batch = TP.db.batch();
+  const saleRef = shopRef.collection('sales').doc();
+
+  // Deduct stock
+  for (const it of cartSnapshot) {
+    const p = S.products.find(x => x.id === it.productId);
+    if (p) batch.update(shopRef.collection('products').doc(p.id), { stockQty: (+p.stockQty||0) - it.qty });
+  }
+
+  // Create new customer if needed
+  if (newCustomerRef) {
+    batch.set(newCustomerRef, {
+      name: customerName, phone: customerPhone, address: '',
+      due: due, 
+      customerCode: customerCode,
+      createdAt: TP.FV.serverTimestamp(),
     });
+    TP.registerCustomerCode(customerCode, S.shopId, customerId, customerPhone, customerName, batch);
+  } else if (customerId && due > 0 && method !== 'p2p_wallet') {
+    const c = S.customers.find(x => x.id === customerId);
+    if (c) batch.update(shopRef.collection('customers').doc(c.id), { due: (+c.due||0) + due });
+  }
 
-    const hasDevice = !!S.paymentSessionId;
+  // Sale record
+  const saleData = {
+    invoiceNo, customerId, customerName, customerPhone, customerCode,
+    salesmanId: S.profile.uid, salesmanName: S.profile.name,
+    type: saleTypeSnapshot, items: cartSnapshot,
+    subtotal, discount, total, paid, due,
+    paymentMethod: method,
+    splitPayments: splitPayments,
+    saleDate: TP.FV.serverTimestamp(),
+  };
+  // P2P extras
+  if (method === 'p2p_wallet' && p2pPayment) {
+    saleData.p2pTxId = p2pPayment.txId || p2pPayment.id || null;
+    saleData.p2pFromWalletId = p2pPayment.fromWalletId || customerForP2P?.walletId || null;
+    saleData.p2pPaidAt = p2pPayment.createdAt || new Date();
+  }
+  batch.set(saleRef, saleData);
 
-    const old = document.getElementById('_pointsWaitModal');
-    if (old) old.remove();
-    const modal = document.createElement('div');
-    modal.id = '_pointsWaitModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.97);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto';
-    modal.innerHTML = `
-      <div style="background:#1e293b;border-radius:24px;max-width:440px;width:100%;padding:24px;text-align:center;color:#fff;box-shadow:0 25px 70px rgba(0,0,0,.5)">
-        <div style="font-size:48px;margin-bottom:6px">⭐</div>
-        <h3 style="font-weight:800;font-size:20px;margin:0 0 4px">Points Payment Sent</h3>
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 16px">${openPayer ? 'Waiting for any customer to scan & pay' : 'Waiting for ' + TP.esc(targetCustomer.name) + ' to pay'}</p>
+  await batch.commit();
 
-        <div style="background:linear-gradient(135deg,#a855f7,#2563eb);color:#fff;border-radius:16px;padding:16px;margin-bottom:14px">
-          <div style="font-size:11px;opacity:.85">Bill</div>
-          <div style="font-size:26px;font-weight:800">₹${total.toFixed(2)}</div>
-          <div style="font-size:11px;opacity:.85;margin-top:6px">${openPayer ? '🔓 Open payer mode' : '👤 ' + TP.esc(targetCustomer.name)}</div>
-        </div>
+  // Build sale object for invoice display
+  const sale = {
+    id: saleRef.id, ...saleData,
+    saleDate: new Date(),
+  };
 
-        <div id="_pqrStatus" style="background:#312e81;border:1px solid #6366f1;border-radius:12px;padding:14px;font-size:13px;color:#c7d2fe;font-weight:600">
-          <div style="font-size:24px;margin-bottom:6px" class="spin">⏳</div>
-          Waiting for customer to confirm...
-          <div style="font-size:10px;opacity:.75;margin-top:6px;font-weight:400" id="_waitHint">
-            ${hasDevice ? '📱 QR is on the payment device' : 'Use the QR below'}
-          </div>
-        </div>
+  // Commission
+  const commRate = +S.profile.commissionRate || 0;
+  if (commRate > 0) {
+    const comm = TP.calculateCommission(total, commRate);
+    await shopRef.collection('sales').doc(saleRef.id).update({
+      commissionAmount: comm, commissionRate: commRate
+    });
+  }
 
-        ${hasDevice ? '' : `
-        <div style="margin-top:14px">
-          <button id="_showQRBtn" style="width:100%;background:#334155;color:#cbd5e1;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">
-            📱 Show Payment QR
-          </button>
-          <div id="_qrWrap" style="display:none;margin-top:10px">
-            <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block">
-              <img id="_qrImg" style="width:220px;height:220px;display:block">
-            </div>
-          </div>
-        </div>
-        `}
+  // Activity log
+  TP.logActivity(S.shopId, S.profile.uid, S.profile.name, 'SALE', `${invoiceNo} · ₹${total}`);
 
-        <button id="_pqrCancel" style="width:100%;background:#7f1d1d;color:#fecaca;padding:13px;border:none;border-radius:12px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;margin-top:14px">
-          Cancel Request
-        </button>
-      </div>`;
-    document.body.appendChild(modal);
+  try {
+    await shopRef.collection('attendance').add({
+      userId: S.profile.uid, userName: S.profile.name, role: 'salesman',
+      action: 'SALE', timestamp: TP.FV.serverTimestamp(),
+      meta: { invoiceNo, total, method },
+    });
+  } catch (e) {}
 
-    if (!hasDevice) {
+  // ⭐ Auto loyalty credit via P2P Wallet
+  if (customerId && method !== 'p2p_wallet') {
+    const c = S.customers.find(x => x.id === customerId);
+    if (c && c.walletId) {
       try {
-        const payURL = TP.buildPointsPayURL(requestId);
-        const qr = await TP.generateQRDataURL(payURL, 400);
-        document.getElementById('_showQRBtn').onclick = () => {
-          const wrap = document.getElementById('_qrWrap');
-          if (wrap.style.display === 'none') {
-            document.getElementById('_qrImg').src = qr;
-            wrap.style.display = 'block';
-            document.getElementById('_showQRBtn').textContent = '🔽 Hide QR';
-          } else {
-            wrap.style.display = 'none';
-            document.getElementById('_showQRBtn').textContent = '📱 Show Payment QR';
+        const cfg = await TP.getP2PConfig(S.shopId);
+        if (cfg && cfg.connected && cfg.allowAutoCredit !== false && cfg.loyaltyPercent > 0) {
+          const creditAmt = Math.floor(total * cfg.loyaltyPercent / 100);
+          if (creditAmt > 0) {
+            await TP.walletAPI.creditPoints(cfg.backendUrl, S.shopId, cfg.secretCode, {
+              customerWalletId: c.walletId,
+              amount: creditAmt,
+              externalRef: invoiceNo,
+              note: 'Loyalty earn',
+            });
+            TP.toast(`🎁 ${creditAmt} pts credited to ${c.name}`, 'success');
           }
-        };
-        // Auto-show
-        document.getElementById('_showQRBtn').click();
+        }
       } catch (e) {
-        document.getElementById('_showQRBtn').style.display = 'none';
+        console.warn('Loyalty credit failed:', e);
       }
     }
-
-    const unsub = TP.watchPointsRequest(requestId, (d) => {
-      if (!d) return;
-      const statusEl = document.getElementById('_pqrStatus');
-
-      if (d.status === 'confirmed') {
-        const result = d.pointsUsed || 0;
-        const payerName = d.payerCustomerName || d.customerName || 'Customer';
-        statusEl.style.background = '#14532d';
-        statusEl.style.color = '#86efac';
-        statusEl.style.borderColor = '#22c55e';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">✅</div><b>' + TP.esc(payerName) + '</b> confirmed <b>' + result + ' points</b>!';
-        setTimeout(() => {
-          try { unsub(); } catch(e){}
-          modal.remove();
-          window._pointsToRedeem = result;
-          window._pointsPayerId = d.payerCustomerId || d.customerId || null;
-          window._pointsPayerName = payerName;
-          document.getElementById('paidInput').value = result.toFixed(2);
-          updateSummary();
-          TP.toast('⭐ ' + result + ' points confirmed by ' + payerName, 'success');
-        }, 1200);
-      } else if (d.status === 'cancelled') {
-        statusEl.style.background = '#7f1d1d';
-        statusEl.style.color = '#fecaca';
-        statusEl.style.borderColor = '#ef4444';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">❌</div>Cancelled';
-        setTimeout(() => {
-          try { unsub(); } catch(e){}
-          modal.remove();
-          document.getElementById('payMethod').value = 'cash';
-          updateSummary();
-        }, 900);
-      } else if (d.status === 'expired') {
-        statusEl.style.background = '#78350f';
-        statusEl.style.color = '#fde68a';
-        statusEl.style.borderColor = '#f59e0b';
-        statusEl.innerHTML = '<div style="font-size:32px;margin-bottom:6px">⏰</div>Expired';
-        setTimeout(() => {
-          try { unsub(); } catch(e){}
-          modal.remove();
-          document.getElementById('payMethod').value = 'cash';
-          updateSummary();
-        }, 900);
-      }
-    });
-
-    document.getElementById('_pqrCancel').onclick = async () => {
-      if (!confirm('Cancel this points request?')) return;
-      try { await TP.cancelPointsRequest(requestId); } catch (e) {}
-      try { unsub(); } catch(e){}
-      modal.remove();
-      document.getElementById('payMethod').value = 'cash';
-      updateSummary();
-    };
-
-  } catch (e) {
-    console.error(e);
-    TP.toast('Failed: ' + (e.message || ''), 'error');
-    document.getElementById('payMethod').value = 'cash';
   }
+
+  // Reset cart
+  S.cart = [];
+  closeModal('cartModal');
+  setTimeout(() => showInvoice(sale), 200);
+  TP.toast('Sale completed!', 'success');
 }
 
 /* ============================================================
@@ -1206,7 +1081,7 @@ function showHeldSalesModal() {
   }));
 }
 
-/* ── PAYMENT WAIT MODAL ── */
+/* ── PAYMENT WAIT MODAL (UPI) ── */
 function showPaymentWaitModal({ reqRef, amount, shopName }) {
   return new Promise(resolve => {
     const old = document.getElementById('_payWaitModal');
@@ -1259,7 +1134,11 @@ function showPaymentWaitModal({ reqRef, amount, shopName }) {
 /* ============================================================
    INVOICE
    ============================================================ */
-const payLabel = m => ({ cash:'Cash', bkash:'bKash', card:'Card', bank:'Bank', upi:'UPI', credit:'Credit', split:'Split', points:'⭐ Points' }[m] || m);
+const payLabel = m => ({
+  cash:'Cash', bkash:'bKash', card:'Card', bank:'Bank',
+  upi:'UPI', credit:'Credit', split:'Split',
+  p2p_wallet:'🔶 P2P Wallet',
+}[m] || m);
 
 function showInvoice(sale) {
   const st = S.profile.shop.settings || {};
@@ -1304,8 +1183,6 @@ function showInvoice(sale) {
       <div class="flex justify-between font-extrabold text-lg border-t-2 border-green-600 pt-2 text-green-600"><span>Total</span><span>${TP.money(sale.total)}</span></div>
       <div class="flex justify-between"><span class="text-gray-600">Paid</span><span class="font-medium text-green-600">${TP.money(sale.paid)}</span></div>
       <div class="flex justify-between font-bold text-red-600"><span>Due</span><span>${TP.money(sale.due)}</span></div>
-      ${sale.pointsUsed > 0 ? `<div class="flex justify-between text-purple-600"><span>⭐ Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
-      ${sale.pointsPaidByName ? `<div class="flex justify-between text-purple-600 text-xs"><span>Paid by</span><span>${TP.esc(sale.pointsPaidByName)}</span></div>` : ''}
     </div>
     <div class="mt-5 flex justify-center">
       <div class="text-center">
@@ -1315,6 +1192,7 @@ function showInvoice(sale) {
     </div>
     <div class="mt-5 text-center text-xs text-gray-500">
       <p>Payment: <b>${TP.esc(payLabel(sale.paymentMethod))}</b></p>
+      ${sale.p2pTxId ? `<p class="text-[10px] mt-1 font-mono">P2P Tx: ${TP.esc(sale.p2pTxId)}</p>` : ''}
       <p class="mt-3 text-base">Thank you! Visit again 🙏</p>
     </div>`;
   S.currentInvoice = sale;
@@ -1374,8 +1252,6 @@ function invoiceDoc(sale, format) {
       <div class="grand"><span>Total</span><span>${TP.money(sale.total)}</span></div>
       <div><span>Paid</span><span>${TP.money(sale.paid)}</span></div>
       <div><span>Due</span><span>${TP.money(sale.due)}</span></div>
-      ${sale.pointsUsed > 0 ? `<div><span>Points used</span><span>${sale.pointsUsed} pts</span></div>` : ''}
-      ${sale.pointsPaidByName ? `<div><span>Points paid by</span><span>${TP.esc(sale.pointsPaidByName)}</span></div>` : ''}
     </div>
     <div class="foot"><p>Payment: ${TP.esc(payLabel(sale.paymentMethod))}</p><p>Thank you! 🙏</p></div>
   </body></html>`;
@@ -1424,8 +1300,7 @@ function renderMySales() {
                 <div class="font-semibold text-sm truncate">${TP.esc(s.customerName)}</div>
                 <div class="text-[11px] text-gray-500 font-mono mt-0.5">${TP.esc(s.invoiceNo)}</div>
                 ${s.customerCode ? `<div class="text-[10px] text-blue-600 font-mono">🆔 ${TP.esc(s.customerCode)}</div>` : ''}
-                ${s.pointsPaidByName && s.pointsPaidByName !== s.customerName ? `<div class="text-[10px] text-purple-600">⭐ Paid by ${TP.esc(s.pointsPaidByName)}</div>` : ''}
-                <div class="text-[11px] text-gray-400 mt-0.5">${TP.fmtDate(s.saleDate)}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">${TP.fmtDate(s.saleDate)} · ${payLabel(s.paymentMethod)}</div>
               </div>
               <div class="text-right">
                 <div class="font-bold text-green-600">${TP.money(s.total)}</div>
@@ -1441,7 +1316,7 @@ function renderMySales() {
 }
 
 /* ============================================================
-   PRODUCTS (view only)
+   PRODUCTS
    ============================================================ */
 function renderProducts() {
   const el = document.getElementById('page-products');
@@ -1476,7 +1351,7 @@ function renderProducts() {
 }
 
 /* ============================================================
-   CUSTOMERS (view only)
+   CUSTOMERS
    ============================================================ */
 function renderCustomers() {
   const el = document.getElementById('page-customers');
@@ -1498,7 +1373,7 @@ function renderCustomers() {
             <div class="font-semibold text-sm truncate">${TP.esc(c.name)}</div>
             ${c.phone ? `<div class="text-xs text-gray-500">📞 ${TP.esc(c.phone)}</div>` : ''}
             ${c.customerCode ? `<div class="text-[10px] text-blue-600 font-mono mt-0.5">🆔 ${TP.esc(c.customerCode)}</div>` : ''}
-            ${(+c.loyaltyPoints || 0) > 0 ? `<div class="text-[10px] text-purple-600 font-semibold mt-0.5">⭐ ${c.loyaltyPoints} pts</div>` : ''}
+            ${c.walletId ? `<div class="text-[10px] text-orange-600 font-mono mt-0.5">🔶 ${TP.esc(c.walletId)}</div>` : ''}
           </div>
           ${(+c.due||0)>0 ? `<div class="font-bold text-red-600 text-sm">Due ${TP.money(c.due)}</div>` : `<div class="text-xs text-green-600 font-medium">Clear</div>`}
         </div>
@@ -1534,10 +1409,7 @@ function renderSettings() {
             <button id="showUPIBtn" class="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded font-semibold">Show QR</button>
           </div>
           <div class="font-mono text-xs bg-gray-50 px-2 py-1.5 rounded">${TP.esc(st.upiId)}</div>
-        </div>` : `
-        <div class="mt-3 pt-3 border-t border-gray-100">
-          <div class="text-[11px] text-orange-600 bg-orange-50 px-2 py-1.5 rounded">⚠️ Admin has not set UPI ID yet</div>
-        </div>`}
+        </div>` : ''}
       </div>
 
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -1551,15 +1423,9 @@ function renderSettings() {
       </div>
 
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <h3 class="font-bold mb-2">⭐ Points Payment</h3>
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-sm font-bold">Loyalty points payment</div>
-            <div class="text-[11px] text-gray-500">Customer confirms via QR scan</div>
-          </div>
-          <div class="text-sm font-bold ${TP.isPointsPaymentEnabled(st) ? 'text-green-600' : 'text-gray-400'}">
-            ${TP.isPointsPaymentEnabled(st) ? 'ENABLED' : 'DISABLED'}
-          </div>
+        <h3 class="font-bold mb-2">🔶 P2P Wallet</h3>
+        <div id="p2pStatusBox">
+          <div class="text-[11px] text-gray-500 mb-2">Checking integration...</div>
         </div>
       </div>
 
@@ -1592,7 +1458,7 @@ function renderSettings() {
 
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <h3 class="font-bold mb-2">💳 Payment Device</h3>
-        <p class="text-xs text-gray-500 mb-3">Connect a separate phone/tablet to display UPI + Points QR</p>
+        <p class="text-xs text-gray-500 mb-3">Connect a separate phone/tablet for UPI QR</p>
         <div id="paymentDeviceBox"></div>
       </div>
 
@@ -1607,6 +1473,7 @@ function renderSettings() {
 
   renderScannerSessionBox();
   renderPaymentDeviceBox();
+  renderP2PStatusBox();
 
   const showBtn = document.getElementById('showUPIBtn');
   if (showBtn) {
@@ -1644,6 +1511,255 @@ function renderSettings() {
     }
   });
 }
+
+async function renderP2PStatusBox() {
+  const box = document.getElementById('p2pStatusBox');
+  if (!box) return;
+  try {
+    const cfg = await TP.getP2PConfig(S.shopId);
+    if (cfg && cfg.connected) {
+      box.innerHTML = `
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-green-500 pulse"></span>
+          <span class="font-bold text-sm text-green-700">Connected</span>
+        </div>
+        <div class="text-xs text-gray-600 mb-1">Merchant Wallet: <b class="font-mono">${TP.esc(cfg.merchantWalletId || '—')}</b></div>
+        <div class="text-xs text-gray-600 mb-1">Loyalty Rate: <b>${cfg.loyaltyPercent || 0}%</b></div>
+        <div class="text-xs text-gray-600">Auto Debit: <b>${cfg.allowAutoDebit !== false ? 'ON' : 'OFF'}</b> · Auto Credit: <b>${cfg.allowAutoCredit !== false ? 'ON' : 'OFF'}</b></div>
+      `;
+    } else {
+      box.innerHTML = `<div class="text-[11px] text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">⚠️ Not configured. Ask admin to set up P2P Wallet in Admin Panel.</div>`;
+    }
+  } catch (e) {
+    box.innerHTML = `<div class="text-[11px] text-red-600">Error: ${TP.esc(e.message)}</div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   🔶 P2P PAYMENT FLOW
+   ═══════════════════════════════════════════════ */
+(function initP2PPayment() {
+  const $ = id => document.getElementById(id);
+  const getShopId = () => S.shopId;
+
+  const P2P = {
+    active: null,
+    pendingSale: null,
+  };
+  window.P2P = P2P;
+
+  window.startP2PPayment = async function({ amount, invoiceNo, customerWalletId, onSuccess }) {
+    const shopId = getShopId();
+    if (!shopId) { alert('Shop ID missing'); return; }
+    if (!amount || amount <= 0) { alert('Invalid amount'); return; }
+
+    const cfg = await TP.getP2PConfig(shopId);
+    if (!cfg || !cfg.connected || !cfg.backendUrl || !cfg.secretCode) {
+      alert('P2P Wallet not configured. Ask admin to set up in Admin Panel → Settings.');
+      return;
+    }
+    if (cfg.allowAutoDebit === false) {
+      alert('Auto debit is disabled by admin');
+      return;
+    }
+
+    closeP2PModal();
+    P2P.pendingSale = { amount, invoiceNo, customerWalletId, onSuccess };
+
+    try {
+      const res = await TP.walletAPI.createPaymentRequest(
+        cfg.backendUrl, shopId, cfg.secretCode,
+        { amount, invoiceNo, expiresIn: 300 }
+      );
+
+      const { requestId, paymentURL } = res;
+      P2P.active = { requestId, paymentURL, amount, invoiceNo };
+
+      $('p2pModalAmount').textContent = '₹' + Number(amount).toFixed(2);
+      $('p2pModalInvoice').textContent = invoiceNo || '';
+
+      try {
+        const qrData = await TP.generateQRDataURL(paymentURL, 500);
+        $('p2pQrImg').src = qrData;
+      } catch (e) {
+        console.error('QR gen failed:', e);
+      }
+
+      $('p2pPaymentModal').style.display = 'flex';
+      startP2PCountdown(300);
+
+      P2P.active.unsubscribe = TP.walletAPI.listenForPayments(shopId, requestId, (payment) => {
+        console.log('✅ P2P payment received:', payment);
+        handleP2PSuccess(payment);
+      });
+
+      // Fallback poll
+      P2P.active.pollInterval = setInterval(async () => {
+        try {
+          const st = await TP.walletAPI.getPaymentStatus(cfg.backendUrl, shopId, cfg.secretCode, requestId);
+          if (st.status === 'completed' || st.paid === true) {
+            handleP2PSuccess(st);
+          }
+        } catch (e) { /* ignore poll errors */ }
+      }, 3000);
+
+    } catch (e) {
+      console.error('startP2PPayment error:', e);
+      alert('Failed to create P2P payment request: ' + (e.message || e));
+      P2P.pendingSale = null;
+    }
+  };
+
+  function handleP2PSuccess(payment) {
+    if (!P2P.active || !P2P.pendingSale) return;
+
+    const statusBox = $('p2pStatusBox');
+    statusBox.style.background = '#14532d';
+    statusBox.style.color = '#86efac';
+    statusBox.style.borderColor = '#22c55e';
+    statusBox.innerHTML = '<div style="font-size:32px;margin-bottom:6px">✅</div>Payment Received!';
+
+    try { navigator.vibrate && navigator.vibrate([100, 50, 100]); } catch(e) {}
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = 1100; osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.value = 0.15; osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+
+    const cb = P2P.pendingSale.onSuccess;
+    const saleData = { ...P2P.pendingSale, payment };
+
+    setTimeout(() => {
+      closeP2PModal();
+      if (typeof cb === 'function') {
+        try { cb(saleData); } catch (e) { console.error('onSuccess error:', e); }
+      }
+    }, 1200);
+  }
+
+  function startP2PCountdown(seconds) {
+    let left = seconds;
+    updateCountdownUI(left);
+    P2P.active.timer = setInterval(() => {
+      left--;
+      if (left <= 0) {
+        clearInterval(P2P.active.timer);
+        cancelP2P('Request expired');
+        return;
+      }
+      updateCountdownUI(left);
+    }, 1000);
+  }
+
+  function updateCountdownUI(left) {
+    const m = Math.floor(left / 60);
+    const s = left % 60;
+    const el = $('p2pCountdown');
+    if (el) el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function closeP2PModal() {
+    $('p2pPaymentModal').style.display = 'none';
+    $('p2pManualModal').style.display = 'none';
+    if (P2P.active) {
+      if (P2P.active.unsubscribe) { try { P2P.active.unsubscribe(); } catch(e){} }
+      if (P2P.active.timer) clearInterval(P2P.active.timer);
+      if (P2P.active.pollInterval) clearInterval(P2P.active.pollInterval);
+      P2P.active = null;
+    }
+    P2P.pendingSale = null;
+  }
+  window.closeP2PModal = closeP2PModal;
+
+  function cancelP2P(reason) {
+    const statusBox = $('p2pStatusBox');
+    if (statusBox) {
+      statusBox.style.background = '#7f1d1d';
+      statusBox.style.color = '#fecaca';
+      statusBox.innerHTML = '<div style="font-size:24px;margin-bottom:4px">⏰</div>' + (reason || 'Cancelled');
+    }
+    setTimeout(closeP2PModal, 1200);
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'p2pCancelBtn') {
+      if (confirm('Cancel P2P payment request?')) closeP2PModal();
+    }
+    if (e.target.id === 'p2pManualBtn') {
+      openManualModal();
+    }
+    if (e.target.id === 'p2pManualBack') {
+      $('p2pManualModal').style.display = 'none';
+      $('p2pPaymentModal').style.display = 'flex';
+    }
+    if (e.target.id === 'p2pManualPay') {
+      doManualPay();
+    }
+  });
+
+  function openManualModal() {
+    if (!P2P.pendingSale) return;
+    $('p2pPaymentModal').style.display = 'none';
+    $('p2pManualWalletId').value = P2P.pendingSale.customerWalletId || '';
+    $('p2pManualErr').textContent = '';
+    $('p2pManualPreview').style.display = 'none';
+    $('p2pManualModal').style.display = 'flex';
+    setTimeout(() => $('p2pManualWalletId').focus(), 200);
+  }
+
+  $('p2pManualWalletId')?.addEventListener('input', async (e) => {
+    e.target.value = e.target.value.toUpperCase();
+    const wid = e.target.value.trim();
+    const preview = $('p2pManualPreview');
+    if (!wid || wid.length < 6) { preview.style.display = 'none'; return; }
+
+    const shopId = getShopId();
+    const cfg = await TP.getP2PConfig(shopId);
+    if (!cfg) return;
+    try {
+      const res = await TP.walletAPI.getBalance(cfg.backendUrl, shopId, cfg.secretCode, wid);
+      preview.style.display = 'block';
+      preview.innerHTML = `
+        <div><b>${TP.esc(res.name || 'Customer')}</b></div>
+        <div style="color:#86efac">Balance: ${res.balance} pts</div>
+        <div style="font-size:11px;color:#94a3b8">Wallet: ${res.walletId}</div>
+      `;
+      $('p2pManualErr').textContent = '';
+    } catch (e) {
+      preview.style.display = 'none';
+      $('p2pManualErr').textContent = e.message || 'Wallet not found';
+    }
+  });
+
+  async function doManualPay() {
+    if (!P2P.pendingSale) return;
+    const wid = $('p2pManualWalletId').value.trim();
+    if (!wid) { $('p2pManualErr').textContent = 'Enter Wallet ID'; return; }
+
+    const shopId = getShopId();
+    const cfg = await TP.getP2PConfig(shopId);
+    if (!cfg) { $('p2pManualErr').textContent = 'Config missing'; return; }
+
+    const btn = $('p2pManualPay');
+    btn.disabled = true; btn.textContent = '⏳ Processing...';
+
+    try {
+      const res = await TP.walletAPI.debitPoints(cfg.backendUrl, shopId, cfg.secretCode, {
+        customerWalletId: wid,
+        amount: P2P.pendingSale.amount,
+        externalRef: P2P.pendingSale.invoiceNo,
+        note: 'Manual debit from POS',
+      });
+
+      $('p2pManualModal').style.display = 'none';
+      handleP2PSuccess({ manual: true, customerWalletId: wid, txId: res.txId });
+    } catch (e) {
+      $('p2pManualErr').textContent = e.message || 'Payment failed';
+      btn.disabled = false; btn.textContent = '✓ Pay Now';
+    }
+  }
+})();
 
 /* ═══════════════════════════════════════════════
    REMOTE SCANNER
@@ -1775,7 +1891,7 @@ async function restoreScannerSession() {
 }
 
 /* ═══════════════════════════════════════════════
-   PAYMENT DEVICE
+   PAYMENT DEVICE (UPI)
    ═══════════════════════════════════════════════ */
 function renderPaymentDeviceBox() {
   const box = document.getElementById('paymentDeviceBox');
